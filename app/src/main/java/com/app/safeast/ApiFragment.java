@@ -27,7 +27,7 @@ import com.android.volley.toolbox.Volley;
  */
 public class ApiFragment extends Fragment {
 
-    private final String selfterURL = "https://www.govmap.gov.il/?z=10&c=180233.01,573089.6&lay=417&b=7";
+    private final String selfterURL = "https://www.govmap.gov.il/?z=10&c=180233.01,573089.6&lay=417,427&b=7";
     private TextView shelterData;
     private Button shelterButton;
     private RequestQueue RQ;

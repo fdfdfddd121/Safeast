@@ -47,9 +47,10 @@ dependencies {
     implementation libs.lifecycle.livedata.ktx
     implementation libs.lifecycle.viewmodel.ktx
     implementation libs.play.services.maps
+    implementation libs.gms.play.services.location
     def fragment_version = "1.2.5"
-    implementation "androidx.fragment:fragment:$fragment_version"
-    implementation 'com.android.volley:volley:1.2.1'
+    implementation libs.fragment
+    implementation libs.volley
     implementation libs.appcompat
     implementation libs.material
     implementation libs.activity
@@ -58,6 +59,6 @@ dependencies {
     testImplementation libs.junit
     androidTestImplementation libs.ext.junit
     androidTestImplementation libs.espresso.core
-    implementation platform('com.google.firebase:firebase-bom:34.4.0')
-    implementation 'com.google.firebase:firebase-analytics'
+    implementation platform(libs.firebase.bom)
+    implementation libs.firebase.analytics
 }
