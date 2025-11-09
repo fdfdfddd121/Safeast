@@ -16,17 +16,9 @@ import android.widget.TextView;
 import android.widget.Toast;
 import okhttp3.*;
 import java.io.IOException;
-
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.util.List;
-
-import okhttp3.Call;
-import okhttp3.Callback;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
-import okhttp3.ResponseBody;
 import android.util.Log;
 
 /**
@@ -38,6 +30,7 @@ public class ApiFragment extends Fragment {
 
     private final String shelterURL = "https://www.govmap.gov.il/api/layers-catalog/entitiesByPoint";
     private final OkHttpClient client = new OkHttpClient();
+
     private TextView shelterData;
     private Button shelterButton;
 
@@ -88,41 +81,27 @@ public class ApiFragment extends Fragment {
 
     private void getShelterData() {
         // JSON body (as in your fetch request)
-        String jsonBody = "{"
-                + "\"point\":[3872548.6,3670185.6],"
-                + "\"layers\":[{\"layerId\":\"427\"},{\"layerId\":\"417\"}],"
-                + "\"tolerance\":277.8130556261113"
-                + "}";
-        RequestBody body = RequestBody.create(
-                jsonBody,
-                MediaType.parse("application/json")
-        );
-        Request request = new Request.Builder()
-                .url(shelterURL)
-                .post(body)
-                .addHeader("accept", "application/json, text/plain, */*")
-                .addHeader("content-type", "application/json")
-                .addHeader("accept-language", "he,he-IL;q=0.9,en-US;q=0.8,en;q=0.7")
-                .addHeader("referer", "https://www.govmap.gov.il/?z=6&c=180726.75,573949.65&lay=427,417&b=7&bs=427,417%7C179775.17,577426.46")
-                .build();
+        String jsonBody="{"+"\"point\":[3872548.6,3670185.6],"+"\"layers\":[{\"layerId\":\"427\"},{\"layerId\":\"417\"}],"+"\"tolerance\":277.8130556261113"+"}";
+        RequestBody body=RequestBody.create(jsonBody, MediaType.parse("application/json"));
+        Request request=new Request.Builder().url(shelterURL).post(body).addHeader("accept", "application/json, text/plain, */*").addHeader("content-type", "application/json").addHeader("accept-language", "he,he-IL;q=0.9,en-US;q=0.8,en;q=0.7").addHeader("referer", "https://www.govmap.gov.il/?z=6&c=180726.75,573949.65&lay=427,417&b=7&bs=427,417%7C179775.17,577426.46").build();
         client.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
                 e.printStackTrace();
-                getActivity().runOnUiThread(() ->
-                        shelterData.setText("Request failed: " + e.getMessage())
-                );
+                getActivity().runOnUiThread(()->shelterData.setText("Request failed: "+e.getMessage()));
             }
+
             public void onResponse(Call call, Response response) throws IOException {
                 if (response.isSuccessful()) {
-                    final String responseData = response.body().string();
-                    getActivity().runOnUiThread(() ->
-                            shelterData.setText(responseData)
-                    );
-                } else {
-                    getActivity().runOnUiThread(() ->
-                            shelterData.setText("Error: " + response.code())
-                    );
+                    final String responseData=response.body().string();
+                    getActivity().runOnUiThread(()->shelterData.setText(responseData));
+                }
+                else {
+                    getActivity().runOnUiThread(()->shelterData.setText("Error: "+response.code()));
+                }
+            }
+        });
+    }
     /**
      * Compute a generic BBOX for testing (centerX, centerY in EPSG:3857)
      */
@@ -159,8 +138,6 @@ public class ApiFragment extends Fragment {
                     Log.e("WMS", "Error: " + response.code());
                     return;
                 }
-            }
-        });
 
                 Bitmap bitmap = BitmapFactory.decodeStream(response.body().byteStream());
                 if (bitmap == null) {
