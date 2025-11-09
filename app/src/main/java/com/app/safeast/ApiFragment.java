@@ -12,13 +12,8 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
-
-import com.android.volley.Request;
-import com.android.volley.RequestQueue;
-import com.android.volley.Response;
-import com.android.volley.VolleyError;
-import com.android.volley.toolbox.StringRequest;
-import com.android.volley.toolbox.Volley;
+import okhttp3.*;
+import java.io.IOException;
 
 /**
  * A simple {@link Fragment} subclass.
@@ -27,10 +22,10 @@ import com.android.volley.toolbox.Volley;
  */
 public class ApiFragment extends Fragment {
 
-    private final String selfterURL = "https://www.govmap.gov.il/?z=10&c=180233.01,573089.6&lay=417,427&b=7";
+    private final String shelterURL = "https://www.govmap.gov.il/api/layers-catalog/entitiesByPoint";
+    private final OkHttpClient client = new OkHttpClient();
     private TextView shelterData;
     private Button shelterButton;
-    private RequestQueue RQ;
 
     public ApiFragment() {
         // Required empty public constructor
@@ -53,7 +48,6 @@ public class ApiFragment extends Fragment {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        RQ = Volley.newRequestQueue(requireActivity());
     }
 
     @Override
@@ -77,19 +71,45 @@ public class ApiFragment extends Fragment {
     }
 
     private void getShelterData() {
-            StringRequest request = new StringRequest(Request.Method.GET, selfterURL, new Response.Listener<String>() {
-                @Override
-                public void onResponse(String response) {
-                    shelterData.setText(getString(R.string.data_from_govmap) + response);
+        // JSON body (as in your fetch request)
+        String jsonBody = "{"
+                + "\"point\":[3872548.6,3670185.6],"
+                + "\"layers\":[{\"layerId\":\"427\"},{\"layerId\":\"417\"}],"
+                + "\"tolerance\":277.8130556261113"
+                + "}";
+        RequestBody body = RequestBody.create(
+                jsonBody,
+                MediaType.parse("application/json")
+        );
+        Request request = new Request.Builder()
+                .url(shelterURL)
+                .post(body)
+                .addHeader("accept", "application/json, text/plain, */*")
+                .addHeader("content-type", "application/json")
+                .addHeader("accept-language", "he,he-IL;q=0.9,en-US;q=0.8,en;q=0.7")
+                .addHeader("referer", "https://www.govmap.gov.il/?z=6&c=180726.75,573949.65&lay=427,417&b=7&bs=427,417%7C179775.17,577426.46")
+                .build();
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                e.printStackTrace();
+                getActivity().runOnUiThread(() ->
+                        shelterData.setText("Request failed: " + e.getMessage())
+                );
+            }
+            public void onResponse(Call call, Response response) throws IOException {
+                if (response.isSuccessful()) {
+                    final String responseData = response.body().string();
+                    getActivity().runOnUiThread(() ->
+                            shelterData.setText(responseData)
+                    );
+                } else {
+                    getActivity().runOnUiThread(() ->
+                            shelterData.setText("Error: " + response.code())
+                    );
                 }
-                }, new Response.ErrorListener() {
-                @Override
-                public void onErrorResponse(VolleyError error) {
-                    shelterData.setText("Failed to get data");
-                    Toast.makeText(requireActivity(), "Failed to get data", Toast.LENGTH_SHORT).show();
-                }
-            });
-            RQ.add(request);
+            }
+        });
     }
 
     @Override

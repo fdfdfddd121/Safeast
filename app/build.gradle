@@ -50,7 +50,7 @@ dependencies {
     implementation libs.gms.play.services.location
     def fragment_version = "1.2.5"
     implementation libs.fragment
-    implementation libs.volley
+    implementation libs.okhttp
     implementation libs.appcompat
     implementation libs.material
     implementation libs.activity
