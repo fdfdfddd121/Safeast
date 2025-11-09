@@ -1,5 +1,7 @@
 package com.app.safeast;
 
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.os.Bundle;
 
 import androidx.fragment.app.Fragment;
@@ -13,12 +15,17 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.android.volley.Request;
-import com.android.volley.RequestQueue;
-import com.android.volley.Response;
-import com.android.volley.VolleyError;
-import com.android.volley.toolbox.StringRequest;
-import com.android.volley.toolbox.Volley;
+import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.util.List;
+
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
+import android.util.Log;
 
 /**
  * A simple {@link Fragment} subclass.
@@ -27,10 +34,9 @@ import com.android.volley.toolbox.Volley;
  */
 public class ApiFragment extends Fragment {
 
-    private final String selfterURL = "https://www.govmap.gov.il/?z=10&c=180233.01,573089.6&lay=417,427&b=7";
+    private final OkHttpClient client = new OkHttpClient();
     private TextView shelterData;
     private Button shelterButton;
-    private RequestQueue RQ;
 
     public ApiFragment() {
         // Required empty public constructor
@@ -53,7 +59,6 @@ public class ApiFragment extends Fragment {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        RQ = Volley.newRequestQueue(requireActivity());
     }
 
     @Override
@@ -65,6 +70,8 @@ public class ApiFragment extends Fragment {
 
     public void onViewCreated(View view, Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
+        double[] bbox = computeBbox(3869274.9172,3767288.2151, 412, 520, 0.5); // sample center + zoom size
+        fetchWmsImage(bbox);
         shelterButton = view.findViewById(R.id.shelterButton);
         shelterData = view.findViewById(R.id.shelterData);
         shelterData.setMovementMethod(new ScrollingMovementMethod());
@@ -77,19 +84,59 @@ public class ApiFragment extends Fragment {
     }
 
     private void getShelterData() {
-            StringRequest request = new StringRequest(Request.Method.GET, selfterURL, new Response.Listener<String>() {
-                @Override
-                public void onResponse(String response) {
-                    shelterData.setText(getString(R.string.data_from_govmap) + response);
+    /**
+     * Compute a generic BBOX for testing (centerX, centerY in EPSG:3857)
+     */
+    private double[] computeBbox(double centerX, double centerY, int width, int height, double metersPerPixel) {
+        double halfWidth = width * metersPerPixel / 2.0;
+        double halfHeight = height * metersPerPixel / 2.0;
+        return new double[]{centerX - halfWidth, centerY - halfHeight, centerX + halfWidth, centerY + halfHeight};
+    }
+
+    private void fetchWmsImage(double[] bbox) {
+        double minX = bbox[0], minY = bbox[1], maxX = bbox[2], maxY = bbox[3];
+
+        String url = "https://www.govmap.gov.il/api/geoserver/ows/public/?" +
+                "SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true" +
+                "&LAYERS=govmap:layer_bombshelters&TILED=false&CRS=EPSG:3857" +
+                "&STYLES=govmap:layer_bombshelters&FEATUREVERSION=1" +
+                "&WIDTH=412&HEIGHT=520" +
+                "&BBOX=" + minX + "," + minY + "," + maxX + "," + maxY;
+
+        Request request = new Request.Builder()
+                .url(url)
+                .addHeader("accept", "image/png,*/*;q=0.8")
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                Log.e("WMS", "Failed: " + e.getMessage());
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                if (!response.isSuccessful()) {
+                    Log.e("WMS", "Error: " + response.code());
+                    return;
                 }
-                }, new Response.ErrorListener() {
-                @Override
-                public void onErrorResponse(VolleyError error) {
-                    shelterData.setText("Failed to get data");
-                    Toast.makeText(requireActivity(), "Failed to get data", Toast.LENGTH_SHORT).show();
+
+                Bitmap bitmap = BitmapFactory.decodeStream(response.body().byteStream());
+                if (bitmap == null) {
+                    Log.e("WMS", "Decode error");
+                    return;
                 }
-            });
-            RQ.add(request);
+
+                List<DotDetector.Coord> dots = DotDetector.findDotCenters(bitmap, minX, minY, maxX, maxY);
+
+                getActivity().runOnUiThread(() -> {
+                    for (DotDetector.Coord c : dots) {
+                        Log.d("DotCoord", "googlemaps coords: X=" + c.mapX + " Y=" + c.mapY);
+                    }
+                    Log.i("WMS", "Total dots: " + dots.size());
+                });
+            }
+        });
     }
 
     @Override
