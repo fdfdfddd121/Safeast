@@ -1,4 +1,4 @@
-package com.app.safeast;
+package com.app.safeast.fragments;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -8,18 +8,18 @@ import androidx.fragment.app.Fragment;
 
 import android.text.method.ScrollingMovementMethod;
 import android.view.LayoutInflater;
-import android.view.PixelCopy;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.TextView;
-import android.widget.Toast;
+
 import okhttp3.*;
 import java.io.IOException;
-import java.io.IOException;
-import java.net.HttpURLConnection;
 import java.util.List;
 import android.util.Log;
+
+import com.app.safeast.helperFiles.DotDetector;
+import com.app.safeast.R;
 
 /**
  * A simple {@link Fragment} subclass.

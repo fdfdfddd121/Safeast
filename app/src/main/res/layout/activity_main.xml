@@ -6,21 +6,24 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    tools:context=".MainActivity">
+    android:fitsSystemWindows="true"
+    tools:context=".activities.MainActivity">
 
     <androidx.fragment.app.FragmentContainerView
         android:id="@+id/fragmentContainerView"
-        android:name="com.app.safeast.ApiFragment"
+        android:name="com.app.safeast.fragments.ApiFragment"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
         />
 
-    <Button
-        android:layout_width="114dp"
-        android:layout_height="61dp"
-        android:layout_gravity="center"
-        android:text="@string/switch_f"
-        android:onClick="switch_onClick"
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="0.1"
+        android:id="@+id/bottomNavigationView"
+        app:menu="@menu/bottom_nav_menu"
+        app:labelVisibilityMode="labeled"
         />
+
 </LinearLayout>

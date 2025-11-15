@@ -1,4 +1,4 @@
-package com.app.safeast;
+package com.app.safeast.helperFiles;
 
 import android.graphics.Bitmap;
 import android.graphics.Color;
