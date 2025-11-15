@@ -35,7 +35,7 @@ secrets {
     // 1. If the secrets.properties file does not exist, create it in the same folder as the local.properties file.
     // 2. Add this line, where YOUR_API_KEY is your API key:
     //        MAPS_API_KEY=YOUR_API_KEY
-    propertiesFileName = "secrets.properties"
+    propertiesFileName = "secret.properties"
 
     // A properties file containing default secret values. This file can be
     // checked in version control.
@@ -47,11 +47,13 @@ dependencies {
     implementation libs.lifecycle.livedata.ktx
     implementation libs.lifecycle.viewmodel.ktx
     implementation libs.play.services.maps
+    implementation "com.google.android.libraries.places:places:5.0.0"
     implementation libs.gms.play.services.location
     implementation 'org.locationtech.proj4j:proj4j-epsg:1.4.1'
     implementation libs.locationtech.proj4j
     implementation libs.locationtech.proj4j.epsg
     implementation libs.okhttp
+    implementation libs.cardview
     def fragment_version = "1.2.5"
     implementation libs.fragment
     implementation libs.appcompat

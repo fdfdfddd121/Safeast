@@ -21,7 +21,6 @@
         android:layout_height="wrap_content"
         android:id="@+id/shelterButton"
         android:text="get shelters in beer sheva"
-        android:onClick="getShelterData"
         />
 
 </LinearLayout>

@@ -1,6 +1,7 @@
 package com.app.safeast.fragments;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.location.Address;
 import android.location.Geocoder;
@@ -19,6 +20,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.SearchView;
 import android.widget.Toast;
 
 import com.app.safeast.R;
@@ -30,6 +32,9 @@ import com.google.android.gms.maps.MapView;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.libraries.places.api.model.Place;
+import com.google.android.libraries.places.widget.Autocomplete;
+import com.google.android.libraries.places.widget.AutocompleteSupportFragment;
 
 import java.io.IOException;
 import java.util.List;
@@ -45,9 +50,8 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
 
 MapView mapView;
 GoogleMap googleMap;
+SearchView searchView;
 Button currLoc;
-EditText editLoc;
-Button pinLoc;
 
 private FusedLocationProviderClient fusedLocationClient;
 private ActivityResultLauncher<String> locationPermissionRequest;
@@ -105,24 +109,39 @@ private ActivityResultLauncher<String> locationPermissionRequest;
 
         mapView = view.findViewById(R.id.mapView);
         currLoc = view.findViewById(R.id.currLoc);
-        editLoc = view.findViewById(R.id.editLoc);
-        pinLoc = view.findViewById(R.id.pinLoc);
-
+        searchView = view.findViewById(R.id.searchView);
         if (mapView != null) {
             mapView.onCreate(savedInstanceState);
             mapView.getMapAsync(this); // Register the callback
         }
+        searchView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                searchView.onActionViewExpanded();
+                searchView.setIconified(false);
+            }
+        });
+
+        searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+            @Override
+            public boolean onQueryTextSubmit(String query) {
+                pinSearchedLocation();
+                searchView.clearFocus();
+                searchView.setQuery("", false);
+                return true;
+            }
+            @Override
+            public boolean onQueryTextChange(String newText) {
+                return false;
+            }
+
+        });
 
         // --- ADD THE ONCLICK LISTENERS FOR YOUR BUTTONS ---
 
         // 1. For the "Current Location" button
         currLoc.setOnClickListener(v -> {
             getCurrentLocationAndPin();
-        });
-
-        // 2. For the "Pin Searched Location" button
-        pinLoc.setOnClickListener(v -> {
-            pinSearchedLocation();
         });
     }
 
@@ -138,7 +157,6 @@ private ActivityResultLauncher<String> locationPermissionRequest;
 
         // Let's place a default marker on Beer Sheva and move the camera
         LatLng beerSheva = new LatLng(31.2530, 34.7915);
-        googleMap.addMarker(new MarkerOptions().position(beerSheva).title("Marker in Beer Sheva"));
         googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(beerSheva, 12));
     }
 
@@ -173,7 +191,7 @@ private ActivityResultLauncher<String> locationPermissionRequest;
      * It uses Geocoder to convert the text address into coordinates.
      */
     private void pinSearchedLocation() {
-        String locationName = editLoc.getText().toString();
+        String locationName = searchView.getQuery().toString();
         if (locationName.isEmpty()) {
             Toast.makeText(getContext(), "Please enter a location to search", Toast.LENGTH_SHORT).show();
             return;
