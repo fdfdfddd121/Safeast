@@ -3,6 +3,8 @@ package com.app.safeast.fragments;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.location.Address;
 import android.location.Geocoder;
 import android.os.Bundle;
@@ -24,6 +26,7 @@ import android.widget.SearchView;
 import android.widget.Toast;
 
 import com.app.safeast.R;
+import com.app.safeast.helperFiles.DotDetector;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.CameraUpdateFactory;
@@ -31,14 +34,22 @@ import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.MapView;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.libraries.places.api.model.Place;
 import com.google.android.libraries.places.widget.Autocomplete;
 import com.google.android.libraries.places.widget.AutocompleteSupportFragment;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
 
 
 /**
@@ -52,6 +63,8 @@ MapView mapView;
 GoogleMap googleMap;
 SearchView searchView;
 Button currLoc;
+HashMap<String, Marker> markers;
+private final OkHttpClient client = new OkHttpClient();
 
 private FusedLocationProviderClient fusedLocationClient;
 private ActivityResultLauncher<String> locationPermissionRequest;
@@ -110,6 +123,7 @@ private ActivityResultLauncher<String> locationPermissionRequest;
         mapView = view.findViewById(R.id.mapView);
         currLoc = view.findViewById(R.id.currLoc);
         searchView = view.findViewById(R.id.searchView);
+        markers = new HashMap<>();
         if (mapView != null) {
             mapView.onCreate(savedInstanceState);
             mapView.getMapAsync(this); // Register the callback
@@ -117,6 +131,7 @@ private ActivityResultLauncher<String> locationPermissionRequest;
         searchView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                searchView.setQuery("",false);
                 searchView.onActionViewExpanded();
                 searchView.setIconified(false);
             }
@@ -127,7 +142,6 @@ private ActivityResultLauncher<String> locationPermissionRequest;
             public boolean onQueryTextSubmit(String query) {
                 pinSearchedLocation();
                 searchView.clearFocus();
-                searchView.setQuery("", false);
                 return true;
             }
             @Override
@@ -166,23 +180,45 @@ private ActivityResultLauncher<String> locationPermissionRequest;
      */
     private void getCurrentLocationAndPin() {
         // First, check if we have permission to access location
-        if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            // You have permission. Get the location.
-            fusedLocationClient.getLastLocation().addOnSuccessListener(requireActivity(), location -> {
-                if (location != null) {
-                    // Location found. Create a LatLng object.
-                    LatLng currentLatLng = new LatLng(location.getLatitude(), location.getLongitude());
-                    // Clear previous markers, add a new one, and move the camera
-                    googleMap.clear();
-                    googleMap.addMarker(new MarkerOptions().position(currentLatLng).title("My Current Location"));
-                    googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 15f)); // Zoom in closer
-                } else {
-                    Toast.makeText(getContext(), "Could not get location. Make sure location is enabled on the device.", Toast.LENGTH_LONG).show();
-                }
-            });
-        } else {
-            // You do not have permission. Request it from the user.
-            locationPermissionRequest.launch(Manifest.permission.ACCESS_FINE_LOCATION);
+        if (markers.containsKey("USER"))
+        {
+            if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                // You have permission. Get the location.
+                fusedLocationClient.getLastLocation().addOnSuccessListener(requireActivity(), location -> {
+                    if (location != null) {
+                        // Location found. Create a LatLng object.
+                        LatLng currentLatLng = new LatLng(location.getLatitude(), location.getLongitude());
+                        // Clear previous markers, add a new one, and move the camera
+                        googleMap.clear();
+                        markers.put("USER",googleMap.addMarker(new MarkerOptions().position(currentLatLng).title("USER")));
+                        googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 15f)); // Zoom in closer
+                    } else {
+                        Toast.makeText(getContext(), "Could not get location. Make sure location is enabled on the device.", Toast.LENGTH_LONG).show();
+                    }
+                });
+            } else {
+                // You do not have permission. Request it from the user.
+                locationPermissionRequest.launch(Manifest.permission.ACCESS_FINE_LOCATION);
+            }
+        }
+        else
+        {
+            LatLng center = markers.get("USER").getPosition();
+            double centerY = center.latitude;
+            double centerX = center.longitude;
+
+            int width = mapView.getWidth();
+            int height = mapView.getHeight();
+
+            double earthRadius = 6378137; // meters
+            float zoom = googleMap.getCameraPosition().zoom;
+
+            double metersPerPixel =
+                    Math.cos(center.latitude * Math.PI / 180) *
+                            2 * Math.PI * earthRadius /
+                            (256 * Math.pow(2, zoom));
+            double[] bbox = computeBbox(centerX, centerY, width, height, metersPerPixel);
+
         }
     }
 
@@ -209,7 +245,7 @@ private ActivityResultLauncher<String> locationPermissionRequest;
 
                 // Clear previous markers, add a new one, and move the camera
                 googleMap.clear();
-                googleMap.addMarker(new MarkerOptions().position(searchedLatLng).title(locationName));
+                markers.put("USER",googleMap.addMarker(new MarkerOptions().position(searchedLatLng).title("USER")));
                 googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(searchedLatLng, 15f));
             } else {
                 // No address found
@@ -219,6 +255,57 @@ private ActivityResultLauncher<String> locationPermissionRequest;
             Log.e("MapFragment", "Geocoder service not available", e);
             Toast.makeText(getContext(), "Could not connect to Geocoding service", Toast.LENGTH_LONG).show();
         }
+    }
+
+    private double[] computeBbox(double centerX, double centerY, int width, int height, double metersPerPixel) {
+        double halfWidth = width * metersPerPixel / 2.0;
+        double halfHeight = height * metersPerPixel / 2.0;
+        return new double[]{centerX - halfWidth, centerY - halfHeight, centerX + halfWidth, centerY + halfHeight};
+    }
+
+    private void fetchWmsImage(double[] bbox) {
+        double minX = bbox[0], minY = bbox[1], maxX = bbox[2], maxY = bbox[3];
+
+        String url = "https://www.govmap.gov.il/api/geoserver/ows/public/?" +
+                "SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true" +
+                "&LAYERS=govmap:layer_bombshelters&TILED=false&CRS=EPSG:3857" +
+                "&STYLES=govmap:layer_bombshelters&FEATUREVERSION=1" +
+                "&WIDTH="+mapView.getWidth()+"&HEIGHT="+mapView.getHeight() +
+                "&BBOX=" + minX + "," + minY + "," + maxX + "," + maxY;
+
+        Request request = new Request.Builder()
+                .url(url)
+                .addHeader("accept", "image/png,*/*;q=0.8")
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                Log.e("WMS", "Failed: " + e.getMessage());
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                if (!response.isSuccessful()) {
+                    Log.e("WMS", "Error: " + response.code());
+                    return;
+                }
+
+                Bitmap bitmap = BitmapFactory.decodeStream(response.body().byteStream());
+                if (bitmap == null) {
+                    Log.e("WMS", "Decode error");
+                    return;
+                }
+
+                List<DotDetector.Coord> dots = DotDetector.findDotCenters(bitmap, minX, minY, maxX, maxY);
+                getActivity().runOnUiThread(() -> {
+                    for (DotDetector.Coord c : dots) {
+                        Log.d("DotCoord", "googlemaps coords: X=" + c.mapX + " Y=" + c.mapY);
+                    }
+                    Log.i("WMS", "Total dots: " + dots.size());
+                });
+            }
+        });
     }
 
 
