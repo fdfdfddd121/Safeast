@@ -76,82 +76,100 @@ public class DotDetector {
      * Detects red/white pixel clusters and returns one coordinate per cluster.
      */
     public static List<Coord> findDotCenters(Bitmap bitmap, double minX, double minY, double maxX, double maxY) {
+        int width = bitmap.getWidth();
+        int height = bitmap.getHeight();
 
-        int width=bitmap.getWidth();
-        int height=bitmap.getHeight();
-        boolean[][] visited=new boolean[width][height];
-        List<Coord> foundDots=new ArrayList<>();
+        // Pre-extract all pixels at once - MUCH faster than repeated getPixel() calls
+        int[] pixels = new int[width * height];
+        bitmap.getPixels(pixels, 0, width, 0, 0, width, height);
 
-        double dx=(maxX-minX)/width;
-        double dy=(maxY-minY)/height;
+        boolean[] visited = new boolean[width * height]; // 1D array is faster
+        List<Coord> foundDots = new ArrayList<>();
 
-        for (int y=0; y<height; y++) {
-            for (int x=0; x<width; x++) {
-                if (visited[x][y])
+        double dx = (maxX - minX) / width;
+        double dy = (maxY - minY) / height;
+
+        // Sample every N pixels instead of every single pixel (adjust stepSize for speed/accuracy balance)
+        int stepSize = 3; // Start checking every 3rd pixel - dots are large enough
+
+        for (int y = 0; y < height; y += stepSize) {
+            for (int x = 0; x < width; x += stepSize) {
+                int index = y * width + x;
+
+                if (visited[index])
                     continue;
 
-                int pixel=bitmap.getPixel(x, y);
-                int r=Color.red(pixel);
-                int g=Color.green(pixel);
-                int b=Color.blue(pixel);
+                int pixel = pixels[index];
 
-                boolean isDotPixel=(r>180 && g<150 && b<150) ||  // red
-                        (r>220 && g>220 && b>220);   // white highlight
+                // Optimized color check using bit operations
+                if (!isDotPixel(pixel))
+                    continue;
 
-                if (isDotPixel) {
-                    // --- flood-fill cluster ---
-                    ArrayDeque<int[]> queue=new ArrayDeque<>();
-                    queue.add(new int[]{x, y});
+                // Flood-fill cluster
+                int[] queueX = new int[5000]; // Pre-allocated arrays instead of ArrayDeque
+                int[] queueY = new int[5000];
+                int qHead = 0, qTail = 0;
 
-                    int sumX=0, sumY=0, count=0;
+                queueX[qTail] = x;
+                queueY[qTail] = y;
+                qTail++;
 
-                    while (!queue.isEmpty()) {
-                        int[] p=queue.poll();
-                        int px=p[0], py=p[1];
-                        if (px<0 || px>=width || py<0 || py>=height)
-                            continue;
-                        if (visited[px][py])
-                            continue;
+                int sumX = 0, sumY = 0, count = 0;
 
-                        int pix=bitmap.getPixel(px, py);
-                        int rr=Color.red(pix);
-                        int gg=Color.green(pix);
-                        int bb=Color.blue(pix);
-                        boolean dotPix=(rr>180 && gg<150 && bb<150) || (rr>220 && gg>220 && bb>220);
-                        if (!dotPix)
-                            continue;
+                while (qHead < qTail) {
+                    int px = queueX[qHead];
+                    int py = queueY[qHead];
+                    qHead++;
 
-                        visited[px][py]=true;
-                        sumX+=px;
-                        sumY+=py;
-                        count++;
+                    if (px < 0 || px >= width || py < 0 || py >= height)
+                        continue;
 
-                        // add neighbors
-                        for (int dyN=-1; dyN<=1; dyN++) {
-                            for (int dxN=-1; dxN<=1; dxN++) {
-                                if (dxN!=0 || dyN!=0)
-                                    queue.add(new int[]{px+dxN, py+dyN});
-                            }
-                        }
+                    int idx = py * width + px;
+                    if (visited[idx])
+                        continue;
+
+                    if (!isDotPixel(pixels[idx]))
+                        continue;
+
+                    visited[idx] = true;
+                    sumX += px;
+                    sumY += py;
+                    count++;
+
+                    // Add 4-connected neighbors only (not 8) for speed
+                    if (qTail + 4 < queueX.length) {
+                        queueX[qTail] = px + 1; queueY[qTail++] = py;
+                        queueX[qTail] = px - 1; queueY[qTail++] = py;
+                        queueX[qTail] = px; queueY[qTail++] = py + 1;
+                        queueX[qTail] = px; queueY[qTail++] = py - 1;
                     }
+                }
 
-                    // ignore small noise clusters
-                    if (count>20) {
-                        double cx=(double) sumX/count;
-                        double cy=(double) sumY/count;
+                if (count > 20) {
+                    double cx = (double) sumX / count;
+                    double cy = (double) sumY / count;
 
-                        double mapX=minX+cx*dx;
-                        double mapY=maxY-cy*dy;  // Y inverted
+                    double mapX = minX + cx * dx;
+                    double mapY = maxY - cy * dy;
 
-                        foundDots.add(new Coord(mapX, mapY, EPSG.GOOGLEMAPS.label));
-                        Coord cord = convertEPSG(mapX, mapY, EPSG.GOOGLEMAPS.label, EPSG.ISRAEL.label);
-                        Log.d("DotDetector", "Dot as ISRAEL → ("+cord.mapX+", "+cord.mapY+")");
-                    }
+                    foundDots.add(new Coord(mapX, mapY, EPSG.GOOGLEMAPS.label));
+                    Coord cord = convertEPSG(mapX, mapY, EPSG.GOOGLEMAPS.label, EPSG.ISRAEL.label);
+                    Log.d("DotDetector", "Dot as ISRAEL → (" + cord.mapX + ", " + cord.mapY + ")");
                 }
             }
         }
 
         return foundDots;
+    }
+
+    // Optimized color checking using bit shifts
+    private static boolean isDotPixel(int pixel) {
+        int r = (pixel >> 16) & 0xFF;
+        int g = (pixel >> 8) & 0xFF;
+        int b = pixel & 0xFF;
+
+        return (r > 180 && g < 150 && b < 150) ||  // red
+                (r > 220 && g > 220 && b > 220);    // white
     }
 }
 

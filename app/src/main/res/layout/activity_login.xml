@@ -7,4 +7,110 @@
     android:layout_height="match_parent"
     tools:context=".activities.LoginActivity">
 
+    <Button
+        android:id="@+id/loginORSignBTN"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="256dp"
+        android:text="Login to account"
+        android:onClick="LoginUser"
+        app:layout_constraintEnd_toEndOf="@+id/password"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toStartOf="@+id/passTitle"
+        app:layout_constraintTop_toTopOf="@+id/email" />
+
+    <TextView
+        android:id="@+id/switchMode"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="don't have an account?"
+        android:clickable="true"
+        android:onClick="switchMode"
+        android:background="#A7EEFC"
+        android:textColor="@color/quantum_googgreen"
+        android:layout_marginTop="20dp"
+        app:layout_constraintEnd_toEndOf="@+id/loginORSignBTN"
+        app:layout_constraintStart_toStartOf="@+id/loginORSignBTN"
+        app:layout_constraintTop_toBottomOf="@+id/loginORSignBTN" />
+
+    <CheckBox
+        android:id="@+id/saveLogin"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="remember me?"
+        android:onClick="saveLogin"
+        android:textColor="@color/quantum_googgreen"
+        app:layout_constraintEnd_toEndOf="@+id/loginORSignBTN"
+        app:layout_constraintHorizontal_bias="0.5"
+        android:layout_margin="15dp"
+        app:layout_constraintStart_toStartOf="@+id/loginORSignBTN"
+        app:layout_constraintTop_toBottomOf="@+id/switchMode" />
+
+    <TextView
+        android:id="@+id/userTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="50dp"
+        android:layout_marginBottom="500dp"
+        android:text="username: "
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/passTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="48dp"
+        android:text="password: "
+        app:layout_constraintStart_toStartOf="@id/userTitle"
+        app:layout_constraintTop_toBottomOf="@+id/userTitle" />
+
+    <TextView
+        android:id="@+id/emailTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="44dp"
+        android:layout_marginBottom="450dp"
+        android:text="email: "
+        app:layout_constraintStart_toStartOf="@id/passTitle"
+        app:layout_constraintTop_toBottomOf="@+id/passTitle" />
+
+    <EditText
+        android:id="@+id/email"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="60dp"
+        android:ems="10"
+        android:hint="email"
+        android:inputType="textEmailAddress"
+        app:layout_constraintEnd_toEndOf="@+id/password"
+        app:layout_constraintStart_toEndOf="@+id/emailTitle"
+        app:layout_constraintTop_toTopOf="@+id/emailTitle" />
+
+    <EditText
+        android:id="@+id/password"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="32dp"
+        android:ems="10"
+        android:hint="password"
+        android:inputType="textPassword"
+        app:layout_constraintEnd_toEndOf="@+id/username"
+        app:layout_constraintStart_toEndOf="@+id/passTitle"
+        app:layout_constraintTop_toTopOf="@+id/passTitle" />
+
+    <EditText
+        android:id="@+id/username"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+
+        android:layout_marginStart="32dp"
+        android:ems="10"
+        android:hint="username"
+        android:inputType="text"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toEndOf="@+id/userTitle"
+        app:layout_constraintTop_toTopOf="@id/userTitle" />
 </androidx.constraintlayout.widget.ConstraintLayout>
