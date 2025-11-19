@@ -33,9 +33,11 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.MapView;
 import com.google.android.gms.maps.OnMapReadyCallback;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.VisibleRegion;
 import com.google.android.libraries.places.api.model.Place;
 import com.google.android.libraries.places.widget.Autocomplete;
 import com.google.android.libraries.places.widget.AutocompleteSupportFragment;
@@ -59,15 +61,15 @@ import okhttp3.Response;
  */
 public class MapFragment extends Fragment implements OnMapReadyCallback {
 
-MapView mapView;
-GoogleMap googleMap;
-SearchView searchView;
-Button currLoc;
-HashMap<String, Marker> markers;
-private final OkHttpClient client = new OkHttpClient();
+    MapView mapView;
+    GoogleMap googleMap;
+    SearchView searchView;
+    Button currLoc;
+    HashMap<String, Marker> markers;
+    private final OkHttpClient client=new OkHttpClient();
 
-private FusedLocationProviderClient fusedLocationClient;
-private ActivityResultLauncher<String> locationPermissionRequest;
+    private FusedLocationProviderClient fusedLocationClient;
+    private ActivityResultLauncher<String> locationPermissionRequest;
 
     // TODO: Rename parameter arguments, choose names that match
     // the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
@@ -85,7 +87,7 @@ private ActivityResultLauncher<String> locationPermissionRequest;
      */
     // TODO: Rename and change types and number of parameters
     public static MapFragment newInstance() {
-        MapFragment fragment = new MapFragment();
+        MapFragment fragment=new MapFragment();
         return fragment;
     }
 
@@ -94,14 +96,15 @@ private ActivityResultLauncher<String> locationPermissionRequest;
         super.onCreate(savedInstanceState);
 
         // ADD THIS INITIALIZATION BLOCK
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity());
+        fusedLocationClient=LocationServices.getFusedLocationProviderClient(requireActivity());
 
         // This handles the result of the permission request
-        locationPermissionRequest = registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
+        locationPermissionRequest=registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted->{
             if (isGranted) {
                 // Permission is granted. Try to get the location again.
                 getCurrentLocationAndPin();
-            } else {
+            }
+            else {
                 // Permission is denied. Show a message to the user.
                 Toast.makeText(getContext(), "Location permission denied. Cannot get current location.", Toast.LENGTH_LONG).show();
             }
@@ -110,8 +113,7 @@ private ActivityResultLauncher<String> locationPermissionRequest;
 
 
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                             Bundle savedInstanceState) {
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         // Inflate the layout for this fragment
         return inflater.inflate(R.layout.fragment_map, container, false);
     }
@@ -120,18 +122,18 @@ private ActivityResultLauncher<String> locationPermissionRequest;
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        mapView = view.findViewById(R.id.mapView);
-        currLoc = view.findViewById(R.id.currLoc);
-        searchView = view.findViewById(R.id.searchView);
-        markers = new HashMap<>();
-        if (mapView != null) {
+        mapView=view.findViewById(R.id.mapView);
+        currLoc=view.findViewById(R.id.currLoc);
+        searchView=view.findViewById(R.id.searchView);
+        markers=new HashMap<>();
+        if (mapView!=null) {
             mapView.onCreate(savedInstanceState);
             mapView.getMapAsync(this); // Register the callback
         }
         searchView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                searchView.setQuery("",false);
+                searchView.setQuery("", false);
                 searchView.onActionViewExpanded();
                 searchView.setIconified(false);
             }
@@ -144,6 +146,7 @@ private ActivityResultLauncher<String> locationPermissionRequest;
                 searchView.clearFocus();
                 return true;
             }
+
             @Override
             public boolean onQueryTextChange(String newText) {
                 return false;
@@ -154,7 +157,7 @@ private ActivityResultLauncher<String> locationPermissionRequest;
         // --- ADD THE ONCLICK LISTENERS FOR YOUR BUTTONS ---
 
         // 1. For the "Current Location" button
-        currLoc.setOnClickListener(v -> {
+        currLoc.setOnClickListener(v->{
             getCurrentLocationAndPin();
         });
     }
@@ -164,13 +167,13 @@ private ActivityResultLauncher<String> locationPermissionRequest;
      */
     @Override
     public void onMapReady(@NonNull GoogleMap map) {
-        googleMap = map;
+        googleMap=map;
 
         // You can customize the map here
         googleMap.getUiSettings().setZoomControlsEnabled(true); // Show zoom buttons
 
         // Let's place a default marker on Beer Sheva and move the camera
-        LatLng beerSheva = new LatLng(31.2530, 34.7915);
+        LatLng beerSheva=new LatLng(31.2530, 34.7915);
         googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(beerSheva, 12));
     }
 
@@ -180,46 +183,77 @@ private ActivityResultLauncher<String> locationPermissionRequest;
      */
     private void getCurrentLocationAndPin() {
         // First, check if we have permission to access location
-        if (markers.containsKey("USER"))
-        {
-            if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+        if (markers.size()>1) {
+            for (Marker marker : markers.values()) {
+                marker.remove();
+            }
+            markers.clear();
+        }
+        if (!markers.containsKey("USER")) {
+            if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED) {
                 // You have permission. Get the location.
-                fusedLocationClient.getLastLocation().addOnSuccessListener(requireActivity(), location -> {
-                    if (location != null) {
+                fusedLocationClient.getLastLocation().addOnSuccessListener(requireActivity(), location->{
+                    if (location!=null) {
                         // Location found. Create a LatLng object.
-                        LatLng currentLatLng = new LatLng(location.getLatitude(), location.getLongitude());
+                        LatLng currentLatLng=new LatLng(location.getLatitude(), location.getLongitude());
                         // Clear previous markers, add a new one, and move the camera
                         googleMap.clear();
-                        markers.put("USER",googleMap.addMarker(new MarkerOptions().position(currentLatLng).title("USER")));
+                        markers.put("USER", googleMap.addMarker(new MarkerOptions().position(currentLatLng).title("USER")));
                         googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 15f)); // Zoom in closer
-                    } else {
+                    }
+                    else {
                         Toast.makeText(getContext(), "Could not get location. Make sure location is enabled on the device.", Toast.LENGTH_LONG).show();
                     }
                 });
-            } else {
+            }
+            else {
                 // You do not have permission. Request it from the user.
                 locationPermissionRequest.launch(Manifest.permission.ACCESS_FINE_LOCATION);
             }
         }
-        else
+        if(markers.containsKey("USER"))
         {
-            LatLng center = markers.get("USER").getPosition();
-            double centerY = center.latitude;
-            double centerX = center.longitude;
+            LatLng center=markers.get("USER").getPosition();
+            DotDetector.Coord centerWPS=DotDetector.convertEPSG(center.longitude, center.latitude, DotDetector.EPSG.GPS.getLabel(), DotDetector.EPSG.GOOGLEMAPS.getLabel());
+            double centerY=centerWPS.mapY;
+            double centerX=centerWPS.mapX;
 
-            int width = mapView.getWidth();
-            int height = mapView.getHeight();
+            int width=mapView.getWidth();
+            int height=mapView.getHeight();
 
-            double earthRadius = 6378137; // meters
-            float zoom = googleMap.getCameraPosition().zoom;
+            double earthRadius=6378137; // meters
+            VisibleRegion vRegion=googleMap.getProjection().getVisibleRegion();
+            LatLng ne=vRegion.farRight;
+            LatLng sw=vRegion.nearLeft;
 
-            double metersPerPixel =
-                    Math.cos(center.latitude * Math.PI / 180) *
-                            2 * Math.PI * earthRadius /
-                            (256 * Math.pow(2, zoom));
-            double[] bbox = computeBbox(centerX, centerY, width, height, metersPerPixel);
+            // Convert both corners to EPSG:3857
+            DotDetector.Coord neMeters=DotDetector.convertEPSG(ne.longitude, ne.latitude, DotDetector.EPSG.GPS.getLabel(), DotDetector.EPSG.GOOGLEMAPS.getLabel());
+            DotDetector.Coord swMeters=DotDetector.convertEPSG(sw.longitude, sw.latitude, DotDetector.EPSG.GPS.getLabel(), DotDetector.EPSG.GOOGLEMAPS.getLabel());
 
+            // Compute meters per pixel
+            double metersPerPixelX=(neMeters.mapX-swMeters.mapX)/width;
+            double metersPerPixelY=(neMeters.mapY-swMeters.mapY)/height;
+
+            // Compute bbox
+            double[] bbox=computeBbox(centerX, centerY, width, height, metersPerPixelX, metersPerPixelY);
+
+            fetchWmsImage(bbox, new DotResultCallback() {
+                @Override
+                public void onDotsReady(List<DotDetector.Coord> dots) {
+                    int i=0;
+                    for (DotDetector.Coord dot : dots) {
+                        LatLng dotLatLng=new LatLng(dot.mapX, dot.mapY);
+                        markers.put("shelter"+i, googleMap.addMarker(new MarkerOptions().position(dotLatLng).title("shelter"+i).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))));
+                    }
+                }
+
+                @Override
+                public void onError(Exception e) {
+                    Log.e("MapFragment", "Error fetching WMS image", e);
+                }
+            });
         }
+
     }
 
     /**
@@ -227,7 +261,7 @@ private ActivityResultLauncher<String> locationPermissionRequest;
      * It uses Geocoder to convert the text address into coordinates.
      */
     private void pinSearchedLocation() {
-        String locationName = searchView.getQuery().toString();
+        String locationName=searchView.getQuery().toString();
         if (locationName.isEmpty()) {
             Toast.makeText(getContext(), "Please enter a location to search", Toast.LENGTH_SHORT).show();
             return;
@@ -235,19 +269,20 @@ private ActivityResultLauncher<String> locationPermissionRequest;
 
         // Geocoder can be slow and should ideally be run in a background thread,
         // but for simplicity, we'll do it on the main thread here.
-        Geocoder geocoder = new Geocoder(getContext(), Locale.getDefault());
+        Geocoder geocoder=new Geocoder(getContext(), Locale.getDefault());
         try {
             // getFromLocationName() returns a list of possible addresses. We take the first one.
-            List<Address> addressList = geocoder.getFromLocationName(locationName, 1);
-            if (addressList != null && !addressList.isEmpty()) {
-                Address address = addressList.get(0);
-                LatLng searchedLatLng = new LatLng(address.getLatitude(), address.getLongitude());
+            List<Address> addressList=geocoder.getFromLocationName(locationName, 1);
+            if (addressList!=null && !addressList.isEmpty()) {
+                Address address=addressList.get(0);
+                LatLng searchedLatLng=new LatLng(address.getLatitude(), address.getLongitude());
 
                 // Clear previous markers, add a new one, and move the camera
                 googleMap.clear();
-                markers.put("USER",googleMap.addMarker(new MarkerOptions().position(searchedLatLng).title("USER")));
+                markers.put("USER", googleMap.addMarker(new MarkerOptions().position(searchedLatLng).title("USER")));
                 googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(searchedLatLng, 15f));
-            } else {
+            }
+            else {
                 // No address found
                 Toast.makeText(getContext(), "Location not found. Try being more specific.", Toast.LENGTH_LONG).show();
             }
@@ -257,53 +292,48 @@ private ActivityResultLauncher<String> locationPermissionRequest;
         }
     }
 
-    private double[] computeBbox(double centerX, double centerY, int width, int height, double metersPerPixel) {
-        double halfWidth = width * metersPerPixel / 2.0;
-        double halfHeight = height * metersPerPixel / 2.0;
+    private double[] computeBbox(double centerX, double centerY, int width, int height, double metersPerPixelX, double metersPerPixelY) {
+        double halfWidth = width * metersPerPixelX / 2.0;
+        double halfHeight = height * metersPerPixelY / 2.0;
         return new double[]{centerX - halfWidth, centerY - halfHeight, centerX + halfWidth, centerY + halfHeight};
     }
 
-    private void fetchWmsImage(double[] bbox) {
-        double minX = bbox[0], minY = bbox[1], maxX = bbox[2], maxY = bbox[3];
+    public interface DotResultCallback {
+        void onDotsReady(List<DotDetector.Coord> dots);
 
-        String url = "https://www.govmap.gov.il/api/geoserver/ows/public/?" +
-                "SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true" +
-                "&LAYERS=govmap:layer_bombshelters&TILED=false&CRS=EPSG:3857" +
-                "&STYLES=govmap:layer_bombshelters&FEATUREVERSION=1" +
-                "&WIDTH="+mapView.getWidth()+"&HEIGHT="+mapView.getHeight() +
-                "&BBOX=" + minX + "," + minY + "," + maxX + "," + maxY;
+        void onError(Exception e);
+    }
 
-        Request request = new Request.Builder()
-                .url(url)
-                .addHeader("accept", "image/png,*/*;q=0.8")
-                .build();
+
+    private void fetchWmsImage(double[] bbox, DotResultCallback callback) {
+        double minX=bbox[0], minY=bbox[1], maxX=bbox[2], maxY=bbox[3];
+
+        String url="https://www.govmap.gov.il/api/geoserver/ows/public/?"+"SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true"+"&LAYERS=govmap:layer_bombshelters&TILED=false&CRS=EPSG:3857"+"&STYLES=govmap:layer_bombshelters&FEATUREVERSION=1"+"&WIDTH="+mapView.getWidth()+"&HEIGHT="+mapView.getHeight()+"&BBOX="+minX+","+minY+","+maxX+","+maxY;
+
+        Request request=new Request.Builder().url(url).addHeader("accept", "image/png,*/*;q=0.8").build();
 
         client.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
-                Log.e("WMS", "Failed: " + e.getMessage());
+                callback.onError(e);
             }
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
                 if (!response.isSuccessful()) {
-                    Log.e("WMS", "Error: " + response.code());
+                    callback.onError(new IOException("HTTP "+response.code()));
                     return;
                 }
 
-                Bitmap bitmap = BitmapFactory.decodeStream(response.body().byteStream());
-                if (bitmap == null) {
-                    Log.e("WMS", "Decode error");
+                Bitmap bitmap=BitmapFactory.decodeStream(response.body().byteStream());
+                if (bitmap==null) {
+                    callback.onError(new IOException("Decode error"));
                     return;
                 }
 
-                List<DotDetector.Coord> dots = DotDetector.findDotCenters(bitmap, minX, minY, maxX, maxY);
-                getActivity().runOnUiThread(() -> {
-                    for (DotDetector.Coord c : dots) {
-                        Log.d("DotCoord", "googlemaps coords: X=" + c.mapX + " Y=" + c.mapY);
-                    }
-                    Log.i("WMS", "Total dots: " + dots.size());
-                });
+                List<DotDetector.Coord> dots=DotDetector.findDotCenters(bitmap, minX, minY, maxX, maxY);
+
+                callback.onDotsReady(dots);
             }
         });
     }
@@ -314,7 +344,7 @@ private ActivityResultLauncher<String> locationPermissionRequest;
     @Override
     public void onResume() {
         super.onResume();
-        if (mapView != null) {
+        if (mapView!=null) {
             mapView.onResume();
         }
     }
@@ -322,7 +352,7 @@ private ActivityResultLauncher<String> locationPermissionRequest;
     @Override
     public void onStart() {
         super.onStart();
-        if (mapView != null) {
+        if (mapView!=null) {
             mapView.onStart();
         }
     }
@@ -330,7 +360,7 @@ private ActivityResultLauncher<String> locationPermissionRequest;
     @Override
     public void onStop() {
         super.onStop();
-        if (mapView != null) {
+        if (mapView!=null) {
             mapView.onStop();
         }
     }
@@ -338,7 +368,7 @@ private ActivityResultLauncher<String> locationPermissionRequest;
     @Override
     public void onPause() {
         super.onPause();
-        if (mapView != null) {
+        if (mapView!=null) {
             mapView.onPause();
         }
     }
@@ -346,7 +376,7 @@ private ActivityResultLauncher<String> locationPermissionRequest;
     @Override
     public void onDestroy() {
         super.onDestroy();
-        if (mapView != null) {
+        if (mapView!=null) {
             mapView.onDestroy();
         }
     }
@@ -354,7 +384,7 @@ private ActivityResultLauncher<String> locationPermissionRequest;
     @Override
     public void onLowMemory() {
         super.onLowMemory();
-        if (mapView != null) {
+        if (mapView!=null) {
             mapView.onLowMemory();
         }
     }
@@ -362,7 +392,7 @@ private ActivityResultLauncher<String> locationPermissionRequest;
     @Override
     public void onSaveInstanceState(@NonNull Bundle outState) {
         super.onSaveInstanceState(outState);
-        if (mapView != null) {
+        if (mapView!=null) {
             mapView.onSaveInstanceState(outState);
         }
     }
