@@ -18,7 +18,8 @@ import java.util.List;
 
 public class DotDetector {
 
-   public enum EPSG {ISRAEL("EPSG:2039"), GOOGLEMAPS("EPSG:3857"), GPS("EPSG:4326");
+    static CRSFactory crsFactory = new CRSFactory();
+    public enum EPSG {ISRAEL("EPSG:2039"), GOOGLEMAPS("EPSG:3857"), GPS("EPSG:4326");
    private final String label;
    EPSG(String label)
    {
@@ -43,7 +44,7 @@ public class DotDetector {
     }
 
     public static Coord convertEPSG(Coord coordinates, String toEPSG) {
-        CRSFactory crsFactory = new CRSFactory();
+
         CoordinateReferenceSystem src = crsFactory.createFromName(coordinates.epsgType);
         CoordinateReferenceSystem dst = crsFactory.createFromName(toEPSG);
 
@@ -58,7 +59,6 @@ public class DotDetector {
     }
 
     public static Coord convertEPSG(double X, double Y, String fromEPSG, String toEPSG) {
-        CRSFactory crsFactory = new CRSFactory();
         CoordinateReferenceSystem src = crsFactory.createFromName(fromEPSG);
         CoordinateReferenceSystem dst = crsFactory.createFromName(toEPSG);
 
@@ -152,8 +152,8 @@ public class DotDetector {
                     double mapX = minX + cx * dx;
                     double mapY = maxY - cy * dy;
 
-                    foundDots.add(new Coord(mapX, mapY, EPSG.GOOGLEMAPS.label));
-                    Coord cord = convertEPSG(mapX, mapY, EPSG.GOOGLEMAPS.label, EPSG.ISRAEL.label);
+                    foundDots.add(new Coord(mapX, mapY, EPSG.GPS.label));
+                    Coord cord = convertEPSG(mapX, mapY, EPSG.GPS.label, EPSG.ISRAEL.label);
                     Log.d("DotDetector", "Dot as ISRAEL → (" + cord.mapX + ", " + cord.mapY + ")");
                 }
             }
