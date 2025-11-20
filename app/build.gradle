@@ -54,6 +54,7 @@ dependencies {
     implementation libs.locationtech.proj4j.epsg
     implementation libs.okhttp
     implementation libs.cardview
+    implementation libs.firebase.database
     def fragment_version = "1.2.5"
     implementation libs.fragment
     implementation libs.appcompat

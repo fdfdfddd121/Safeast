@@ -46,6 +46,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.Executor;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -189,10 +190,12 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
             }
             markers.clear();
         }
-        if (!markers.containsKey("USER")) {
+        if(markers.containsKey("USER")){
+            getShelters();
+        }
             if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED) {
                 // You have permission. Get the location.
-                fusedLocationClient.getLastLocation().addOnSuccessListener(requireActivity(), location->{
+                fusedLocationClient.getLastLocation().addOnSuccessListener((Executor) requireActivity(), location->{
                     if (location!=null) {
                         // Location found. Create a LatLng object.
                         LatLng currentLatLng=new LatLng(location.getLatitude(), location.getLongitude());
@@ -200,6 +203,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
                         googleMap.clear();
                         markers.put("USER", googleMap.addMarker(new MarkerOptions().position(currentLatLng).title("USER")));
                         googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 15f)); // Zoom in closer
+                        getShelters();
                     }
                     else {
                         Toast.makeText(getContext(), "Could not get location. Make sure location is enabled on the device.", Toast.LENGTH_LONG).show();
@@ -210,50 +214,48 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
                 // You do not have permission. Request it from the user.
                 locationPermissionRequest.launch(Manifest.permission.ACCESS_FINE_LOCATION);
             }
-        }
-        if(markers.containsKey("USER"))
-        {
-            LatLng center=markers.get("USER").getPosition();
-            DotDetector.Coord centerWPS=DotDetector.convertEPSG(center.longitude, center.latitude, DotDetector.EPSG.GPS.getLabel(), DotDetector.EPSG.GOOGLEMAPS.getLabel());
-            double centerY=centerWPS.mapY;
-            double centerX=centerWPS.mapX;
+    }
 
-            int width=mapView.getWidth();
-            int height=mapView.getHeight();
+    private void getShelters() {
+        LatLng center=markers.get("USER").getPosition();
+        DotDetector.Coord centerWPS=DotDetector.convertEPSG(center.longitude, center.latitude, DotDetector.EPSG.GPS.getLabel(), DotDetector.EPSG.GOOGLEMAPS.getLabel());
+        double centerY=centerWPS.mapY;
+        double centerX=centerWPS.mapX;
 
-            double earthRadius=6378137; // meters
-            VisibleRegion vRegion=googleMap.getProjection().getVisibleRegion();
-            LatLng ne=vRegion.farRight;
-            LatLng sw=vRegion.nearLeft;
+        int width=mapView.getWidth();
+        int height=mapView.getHeight();
 
-            // Convert both corners to EPSG:3857
-            DotDetector.Coord neMeters=DotDetector.convertEPSG(ne.longitude, ne.latitude, DotDetector.EPSG.GPS.getLabel(), DotDetector.EPSG.GOOGLEMAPS.getLabel());
-            DotDetector.Coord swMeters=DotDetector.convertEPSG(sw.longitude, sw.latitude, DotDetector.EPSG.GPS.getLabel(), DotDetector.EPSG.GOOGLEMAPS.getLabel());
+        double earthRadius=6378137; // meters
+        VisibleRegion vRegion=googleMap.getProjection().getVisibleRegion();
+        LatLng ne=vRegion.farRight;
+        LatLng sw=vRegion.nearLeft;
 
-            // Compute meters per pixel
-            double metersPerPixelX=(neMeters.mapX-swMeters.mapX)/width;
-            double metersPerPixelY=(neMeters.mapY-swMeters.mapY)/height;
+        // Convert both corners to EPSG:3857
+        DotDetector.Coord neMeters=DotDetector.convertEPSG(ne.longitude, ne.latitude, DotDetector.EPSG.GPS.getLabel(), DotDetector.EPSG.GOOGLEMAPS.getLabel());
+        DotDetector.Coord swMeters=DotDetector.convertEPSG(sw.longitude, sw.latitude, DotDetector.EPSG.GPS.getLabel(), DotDetector.EPSG.GOOGLEMAPS.getLabel());
 
-            // Compute bbox
-            double[] bbox=computeBbox(centerX, centerY, width, height, metersPerPixelX, metersPerPixelY);
+        // Compute meters per pixel
+        double metersPerPixelX=(neMeters.mapX-swMeters.mapX)/width;
+        double metersPerPixelY=(neMeters.mapY-swMeters.mapY)/height;
 
-            fetchWmsImage(bbox, new DotResultCallback() {
-                @Override
-                public void onDotsReady(List<DotDetector.Coord> dots) {
-                    int i=0;
-                    for (DotDetector.Coord dot : dots) {
-                        LatLng dotLatLng=new LatLng(dot.mapX, dot.mapY);
-                        markers.put("shelter"+i, googleMap.addMarker(new MarkerOptions().position(dotLatLng).title("shelter"+i).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))));
-                    }
+        // Compute bbox
+        double[] bbox=computeBbox(centerX, centerY, width, height, metersPerPixelX, metersPerPixelY);
+
+        fetchWmsImage(bbox, new DotResultCallback() {
+            @Override
+            public void onDotsReady(List<DotDetector.Coord> dots) {
+                int i=0;
+                for (DotDetector.Coord dot : dots) {
+                    LatLng dotLatLng=new LatLng(dot.mapX, dot.mapY);
+                    markers.put("shelter"+i, googleMap.addMarker(new MarkerOptions().position(dotLatLng).title("shelter"+i).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))));
                 }
+            }
 
-                @Override
-                public void onError(Exception e) {
-                    Log.e("MapFragment", "Error fetching WMS image", e);
-                }
-            });
-        }
-
+            @Override
+            public void onError(Exception e) {
+                Log.e("MapFragment", "Error fetching WMS image", e);
+            }
+        });
     }
 
     /**
