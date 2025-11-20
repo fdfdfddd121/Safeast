@@ -46,6 +46,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.Executor;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -192,7 +193,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         if (!markers.containsKey("USER")) {
             if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED) {
                 // You have permission. Get the location.
-                fusedLocationClient.getLastLocation().addOnSuccessListener(requireActivity(), location->{
+                fusedLocationClient.getLastLocation().addOnSuccessListener((Executor) requireActivity(), location->{
                     if (location!=null) {
                         // Location found. Create a LatLng object.
                         LatLng currentLatLng=new LatLng(location.getLatitude(), location.getLongitude());
