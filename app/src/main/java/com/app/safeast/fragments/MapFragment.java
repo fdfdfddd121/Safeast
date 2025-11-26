@@ -1,7 +1,6 @@
 package com.app.safeast.fragments;
 
 import android.Manifest;
-import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -21,7 +20,6 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.SearchView;
 import android.widget.Toast;
 
@@ -38,15 +36,11 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.VisibleRegion;
-import com.google.android.libraries.places.api.model.Place;
-import com.google.android.libraries.places.widget.Autocomplete;
-import com.google.android.libraries.places.widget.AutocompleteSupportFragment;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.concurrent.Executor;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -195,7 +189,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         }
             if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED) {
                 // You have permission. Get the location.
-                fusedLocationClient.getLastLocation().addOnSuccessListener((Executor) requireActivity(), location->{
+                fusedLocationClient.getLastLocation().addOnSuccessListener(requireActivity(), location->{
                     if (location!=null) {
                         // Location found. Create a LatLng object.
                         LatLng currentLatLng=new LatLng(location.getLatitude(), location.getLongitude());
@@ -218,7 +212,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
 
     private void getShelters() {
         LatLng center=markers.get("USER").getPosition();
-        DotDetector.Coord centerWPS=DotDetector.convertEPSG(center.longitude, center.latitude, DotDetector.EPSG.GPS.getLabel(), DotDetector.EPSG.GOOGLEMAPS.getLabel());
+        DotDetector.Coord centerWPS=DotDetector.convertEPSG(center.longitude, center.latitude, DotDetector.EPSG.GPS.getLabel(), DotDetector.EPSG.WPS.getLabel());
         double centerY=centerWPS.mapY;
         double centerX=centerWPS.mapX;
 
@@ -231,8 +225,8 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         LatLng sw=vRegion.nearLeft;
 
         // Convert both corners to EPSG:3857
-        DotDetector.Coord neMeters=DotDetector.convertEPSG(ne.longitude, ne.latitude, DotDetector.EPSG.GPS.getLabel(), DotDetector.EPSG.GOOGLEMAPS.getLabel());
-        DotDetector.Coord swMeters=DotDetector.convertEPSG(sw.longitude, sw.latitude, DotDetector.EPSG.GPS.getLabel(), DotDetector.EPSG.GOOGLEMAPS.getLabel());
+        DotDetector.Coord neMeters=DotDetector.convertEPSG(ne.longitude, ne.latitude, DotDetector.EPSG.GPS.getLabel(), DotDetector.EPSG.WPS.getLabel());
+        DotDetector.Coord swMeters=DotDetector.convertEPSG(sw.longitude, sw.latitude, DotDetector.EPSG.GPS.getLabel(), DotDetector.EPSG.WPS.getLabel());
 
         // Compute meters per pixel
         double metersPerPixelX=(neMeters.mapX-swMeters.mapX)/width;
@@ -244,11 +238,15 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         fetchWmsImage(bbox, new DotResultCallback() {
             @Override
             public void onDotsReady(List<DotDetector.Coord> dots) {
-                int i=0;
-                for (DotDetector.Coord dot : dots) {
-                    LatLng dotLatLng=new LatLng(dot.mapX, dot.mapY);
-                    markers.put("shelter"+i, googleMap.addMarker(new MarkerOptions().position(dotLatLng).title("shelter"+i).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))));
-                }
+                if (getActivity() == null) return;
+                getActivity().runOnUiThread(() -> {
+                    int i = 0;
+                    for (DotDetector.Coord dot : dots) {
+                        LatLng dotLatLng = new LatLng(dot.mapY, dot.mapX);
+                        markers.put("shelter" + i, googleMap.addMarker(new MarkerOptions().position(dotLatLng).title("shelter" + i).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))));
+                        i++;
+                    }
+                });
             }
 
             @Override

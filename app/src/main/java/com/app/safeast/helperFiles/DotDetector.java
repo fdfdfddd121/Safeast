@@ -1,7 +1,6 @@
 package com.app.safeast.helperFiles;
 
 import android.graphics.Bitmap;
-import android.graphics.Color;
 import android.util.Log;
 
 import org.locationtech.proj4j.CRSFactory;
@@ -10,16 +9,15 @@ import org.locationtech.proj4j.CoordinateTransform;
 import org.locationtech.proj4j.CoordinateTransformFactory;
 import org.locationtech.proj4j.ProjCoordinate;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
-
+import java.util.Map;
 
 
 public class DotDetector {
 
-    static CRSFactory crsFactory = new CRSFactory();
-    public enum EPSG {ISRAEL("EPSG:2039"), GOOGLEMAPS("EPSG:3857"), GPS("EPSG:4326");
+    public enum EPSG {ISRAEL("EPSG:2039"), WPS("EPSG:3857"), GPS("EPSG:4326");
    private final String label;
    EPSG(String label)
    {
@@ -43,14 +41,26 @@ public class DotDetector {
 
     }
 
+    // Add these as class-level static fields
+    private static final CRSFactory crsFactory = new CRSFactory();
+    private static final CoordinateTransformFactory ctFactory = new CoordinateTransformFactory();
+    private static final Map<String, CoordinateReferenceSystem> crsCache = new HashMap<>();
+    private static final Map<String, CoordinateTransform> transformCache = new HashMap<>();
+
+    // Optimized conversion method
     public static Coord convertEPSG(Coord coordinates, String toEPSG) {
+        String transformKey = coordinates.epsgType + "->" + toEPSG;
 
-        CoordinateReferenceSystem src = crsFactory.createFromName(coordinates.epsgType);
-        CoordinateReferenceSystem dst = crsFactory.createFromName(toEPSG);
+        // Get or create cached transform
+        CoordinateTransform transform = transformCache.get(transformKey);
+        if (transform == null) {
+            CoordinateReferenceSystem src = getCachedCRS(coordinates.epsgType);
+            CoordinateReferenceSystem dst = getCachedCRS(toEPSG);
+            transform = ctFactory.createTransform(src, dst);
+            transformCache.put(transformKey, transform);
+        }
 
-        CoordinateTransformFactory ctFactory = new CoordinateTransformFactory();
-        CoordinateTransform transform = ctFactory.createTransform(src, dst);
-
+        // Reuse ProjCoordinate objects if possible
         ProjCoordinate srcCoord = new ProjCoordinate(coordinates.mapX, coordinates.mapY);
         ProjCoordinate dstCoord = new ProjCoordinate();
         transform.transform(srcCoord, dstCoord);
@@ -58,13 +68,29 @@ public class DotDetector {
         return new Coord(dstCoord.x, dstCoord.y, toEPSG);
     }
 
+    private static CoordinateReferenceSystem getCachedCRS(String epsgType) {
+        CoordinateReferenceSystem crs = crsCache.get(epsgType);
+        if (crs == null) {
+            crs = crsFactory.createFromName(epsgType);
+            crsCache.put(epsgType, crs);
+        }
+        return crs;
+    }
+
+
     public static Coord convertEPSG(double X, double Y, String fromEPSG, String toEPSG) {
-        CoordinateReferenceSystem src = crsFactory.createFromName(fromEPSG);
-        CoordinateReferenceSystem dst = crsFactory.createFromName(toEPSG);
+        String transformKey = fromEPSG + "->" + toEPSG;
 
-        CoordinateTransformFactory ctFactory = new CoordinateTransformFactory();
-        CoordinateTransform transform = ctFactory.createTransform(src, dst);
+        // Get or create cached transform
+        CoordinateTransform transform = transformCache.get(transformKey);
+        if (transform == null) {
+            CoordinateReferenceSystem src = getCachedCRS(fromEPSG);
+            CoordinateReferenceSystem dst = getCachedCRS(toEPSG);
+            transform = ctFactory.createTransform(src, dst);
+            transformCache.put(transformKey, transform);
+        }
 
+        // Reuse ProjCoordinate objects if possible
         ProjCoordinate srcCoord = new ProjCoordinate(X, Y);
         ProjCoordinate dstCoord = new ProjCoordinate();
         transform.transform(srcCoord, dstCoord);
@@ -152,8 +178,8 @@ public class DotDetector {
                     double mapX = minX + cx * dx;
                     double mapY = maxY - cy * dy;
 
-                    foundDots.add(new Coord(mapX, mapY, EPSG.GPS.label));
-                    Coord cord = convertEPSG(mapX, mapY, EPSG.GPS.label, EPSG.ISRAEL.label);
+                    foundDots.add(convertEPSG(mapX,mapY,EPSG.WPS.label, EPSG.GPS.label));
+                    Coord cord = convertEPSG(mapX, mapY, EPSG.WPS.label, EPSG.ISRAEL.label);
                     Log.d("DotDetector", "Dot as ISRAEL → (" + cord.mapX + ", " + cord.mapY + ")");
                 }
             }
