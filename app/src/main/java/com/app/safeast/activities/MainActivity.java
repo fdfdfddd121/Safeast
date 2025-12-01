@@ -1,7 +1,6 @@
 package com.app.safeast.activities;
 
 import android.os.Bundle;
-import android.view.View;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
@@ -9,11 +8,9 @@ import androidx.fragment.app.FragmentContainerView;
 import androidx.fragment.app.FragmentManager;
 
 import com.app.safeast.R;
-import com.app.safeast.fragments.ApiFragment;
 import com.app.safeast.fragments.ChatFragment;
 import com.app.safeast.fragments.FriendsFragment;
 import com.app.safeast.fragments.MapFragment;
-import com.google.android.material.bottomnavigation.BottomNavigationMenuView;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 
 public class MainActivity extends AppCompatActivity {

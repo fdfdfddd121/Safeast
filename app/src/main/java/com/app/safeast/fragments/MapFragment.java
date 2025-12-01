@@ -36,16 +36,24 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.VisibleRegion;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import okhttp3.Call;
 import okhttp3.Callback;
+import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
+import okhttp3.RequestBody;
 import okhttp3.Response;
 
 
@@ -61,7 +69,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     SearchView searchView;
     Button currLoc;
     HashMap<String, Marker> markers;
-    private final OkHttpClient client=new OkHttpClient();
+    private final OkHttpClient client = new OkHttpClient();
 
     private FusedLocationProviderClient fusedLocationClient;
     private ActivityResultLauncher<String> locationPermissionRequest;
@@ -82,7 +90,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
      */
     // TODO: Rename and change types and number of parameters
     public static MapFragment newInstance() {
-        MapFragment fragment=new MapFragment();
+        MapFragment fragment = new MapFragment();
         return fragment;
     }
 
@@ -91,15 +99,14 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         super.onCreate(savedInstanceState);
 
         // ADD THIS INITIALIZATION BLOCK
-        fusedLocationClient=LocationServices.getFusedLocationProviderClient(requireActivity());
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity());
 
         // This handles the result of the permission request
-        locationPermissionRequest=registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted->{
+        locationPermissionRequest = registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
             if (isGranted) {
                 // Permission is granted. Try to get the location again.
-                getCurrentLocationAndPin();
-            }
-            else {
+                sheltersNearGPS();
+            } else {
                 // Permission is denied. Show a message to the user.
                 Toast.makeText(getContext(), "Location permission denied. Cannot get current location.", Toast.LENGTH_LONG).show();
             }
@@ -117,11 +124,11 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        mapView=view.findViewById(R.id.mapView);
-        currLoc=view.findViewById(R.id.currLoc);
-        searchView=view.findViewById(R.id.searchView);
-        markers=new HashMap<>();
-        if (mapView!=null) {
+        mapView = view.findViewById(R.id.mapView);
+        currLoc = view.findViewById(R.id.currLoc);
+        searchView = view.findViewById(R.id.searchView);
+        markers = new HashMap<>();
+        if (mapView != null) {
             mapView.onCreate(savedInstanceState);
             mapView.getMapAsync(this); // Register the callback
         }
@@ -137,7 +144,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
             @Override
             public boolean onQueryTextSubmit(String query) {
-                pinSearchedLocation();
+                sheltersNearSearch();
                 searchView.clearFocus();
                 return true;
             }
@@ -152,8 +159,8 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         // --- ADD THE ONCLICK LISTENERS FOR YOUR BUTTONS ---
 
         // 1. For the "Current Location" button
-        currLoc.setOnClickListener(v->{
-            getCurrentLocationAndPin();
+        currLoc.setOnClickListener(v -> {
+            sheltersNearGPS();
         });
     }
 
@@ -162,79 +169,74 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
      */
     @Override
     public void onMapReady(@NonNull GoogleMap map) {
-        googleMap=map;
+        googleMap = map;
 
         // You can customize the map here
         googleMap.getUiSettings().setZoomControlsEnabled(true); // Show zoom buttons
 
         // Let's place a default marker on Beer Sheva and move the camera
-        LatLng beerSheva=new LatLng(31.2530, 34.7915);
+        LatLng beerSheva = new LatLng(31.2530, 34.7915);
         googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(beerSheva, 12));
     }
 
-    /**
-     * Handles the logic for the "Current Location" button.
-     * It checks for permission and then gets the last known location.
-     */
-    private void getCurrentLocationAndPin() {
+    private void sheltersNearGPS() {
         // First, check if we have permission to access location
-        if (markers.size()>1) {
+        clearMarkers();
+        if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            // You have permission. Get the location.
+            fusedLocationClient.getLastLocation().addOnSuccessListener(requireActivity(), location -> {
+                if (location != null) {
+                    // Location found. Create a LatLng object.
+                    LatLng currentLatLng = new LatLng(location.getLatitude(), location.getLongitude());
+                    // Clear previous markers, add a new one, and move the camera
+                    googleMap.clear();
+                    markers.put("USER", googleMap.addMarker(new MarkerOptions().position(currentLatLng).title("USER")));
+                    googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 15f)); // Zoom in closer
+                    getShelters();
+                } else {
+                    Toast.makeText(getContext(), "Could not get location. Make sure location is enabled on the device.", Toast.LENGTH_LONG).show();
+                }
+            });
+        } else {
+            // You do not have permission. Request it from the user.
+            locationPermissionRequest.launch(Manifest.permission.ACCESS_FINE_LOCATION);
+        }
+    }
+
+    private void clearMarkers() {
+        if (!markers.isEmpty()) {
             for (Marker marker : markers.values()) {
                 marker.remove();
             }
             markers.clear();
         }
-        if(markers.containsKey("USER")){
-            getShelters();
-        }
-            if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED) {
-                // You have permission. Get the location.
-                fusedLocationClient.getLastLocation().addOnSuccessListener(requireActivity(), location->{
-                    if (location!=null) {
-                        // Location found. Create a LatLng object.
-                        LatLng currentLatLng=new LatLng(location.getLatitude(), location.getLongitude());
-                        // Clear previous markers, add a new one, and move the camera
-                        googleMap.clear();
-                        markers.put("USER", googleMap.addMarker(new MarkerOptions().position(currentLatLng).title("USER")));
-                        googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 15f)); // Zoom in closer
-                        getShelters();
-                    }
-                    else {
-                        Toast.makeText(getContext(), "Could not get location. Make sure location is enabled on the device.", Toast.LENGTH_LONG).show();
-                    }
-                });
-            }
-            else {
-                // You do not have permission. Request it from the user.
-                locationPermissionRequest.launch(Manifest.permission.ACCESS_FINE_LOCATION);
-            }
     }
 
     private void getShelters() {
-        LatLng center=markers.get("USER").getPosition();
-        DotDetector.Coord centerWPS=DotDetector.convertEPSG(center.longitude, center.latitude, DotDetector.EPSG.GPS.getLabel(), DotDetector.EPSG.WPS.getLabel());
-        double centerY=centerWPS.mapY;
-        double centerX=centerWPS.mapX;
+        LatLng center = markers.get("USER").getPosition();
+        DotDetector.Coord centerWPS = DotDetector.convertEPSG(center.longitude, center.latitude, DotDetector.EPSG.GPS.getLabel(), DotDetector.EPSG.WPS.getLabel());
+        double centerY = centerWPS.mapY;
+        double centerX = centerWPS.mapX;
 
-        int width=mapView.getWidth();
-        int height=mapView.getHeight();
+        int width = mapView.getWidth();
+        int height = mapView.getHeight();
 
-        double earthRadius=6378137; // meters
-        VisibleRegion vRegion=googleMap.getProjection().getVisibleRegion();
-        LatLng ne=vRegion.farRight;
-        LatLng sw=vRegion.nearLeft;
+        double earthRadius = 6378137; // meters
+        VisibleRegion vRegion = googleMap.getProjection().getVisibleRegion();
+        LatLng ne = vRegion.farRight;
+        LatLng sw = vRegion.nearLeft;
 
         // Convert both corners to EPSG:3857
-        DotDetector.Coord neMeters=DotDetector.convertEPSG(ne.longitude, ne.latitude, DotDetector.EPSG.GPS.getLabel(), DotDetector.EPSG.WPS.getLabel());
-        DotDetector.Coord swMeters=DotDetector.convertEPSG(sw.longitude, sw.latitude, DotDetector.EPSG.GPS.getLabel(), DotDetector.EPSG.WPS.getLabel());
+        DotDetector.Coord neMeters = DotDetector.convertEPSG(ne.longitude, ne.latitude, DotDetector.EPSG.GPS.getLabel(), DotDetector.EPSG.WPS.getLabel());
+        DotDetector.Coord swMeters = DotDetector.convertEPSG(sw.longitude, sw.latitude, DotDetector.EPSG.GPS.getLabel(), DotDetector.EPSG.WPS.getLabel());
 
         // Compute meters per pixel
-        double metersPerPixelX=(neMeters.mapX-swMeters.mapX)/width;
-        double metersPerPixelY=(neMeters.mapY-swMeters.mapY)/height;
+        double metersPerPixelX = (neMeters.mapX - swMeters.mapX) / width;
+        double metersPerPixelY = (neMeters.mapY - swMeters.mapY) / height;
 
         // Compute bbox
-        double[] bbox=computeBbox(centerX, centerY, width, height, metersPerPixelX, metersPerPixelY);
-
+        double[] bbox = computeBbox(centerX, centerY, width, height, metersPerPixelX, metersPerPixelY);
+        fetchAlertTime(centerX, centerY);
         fetchWmsImage(bbox, new DotResultCallback() {
             @Override
             public void onDotsReady(List<DotDetector.Coord> dots) {
@@ -256,33 +258,30 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         });
     }
 
-    /**
-     * Handles the logic for the "Pin Searched Location" button.
-     * It uses Geocoder to convert the text address into coordinates.
-     */
-    private void pinSearchedLocation() {
-        String locationName=searchView.getQuery().toString();
+
+    private void sheltersNearSearch() {
+        String locationName = searchView.getQuery().toString();
         if (locationName.isEmpty()) {
             Toast.makeText(getContext(), "Please enter a location to search", Toast.LENGTH_SHORT).show();
             return;
         }
-
+        clearMarkers();
         // Geocoder can be slow and should ideally be run in a background thread,
         // but for simplicity, we'll do it on the main thread here.
-        Geocoder geocoder=new Geocoder(getContext(), Locale.getDefault());
+        Geocoder geocoder = new Geocoder(getContext(), Locale.getDefault());
         try {
             // getFromLocationName() returns a list of possible addresses. We take the first one.
-            List<Address> addressList=geocoder.getFromLocationName(locationName, 1);
-            if (addressList!=null && !addressList.isEmpty()) {
-                Address address=addressList.get(0);
-                LatLng searchedLatLng=new LatLng(address.getLatitude(), address.getLongitude());
+            List<Address> addressList = geocoder.getFromLocationName(locationName, 1);
+            if (addressList != null && !addressList.isEmpty()) {
+                Address address = addressList.get(0);
+                LatLng searchedLatLng = new LatLng(address.getLatitude(), address.getLongitude());
 
                 // Clear previous markers, add a new one, and move the camera
                 googleMap.clear();
                 markers.put("USER", googleMap.addMarker(new MarkerOptions().position(searchedLatLng).title("USER")));
                 googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(searchedLatLng, 15f));
-            }
-            else {
+                getShelters();
+            } else {
                 // No address found
                 Toast.makeText(getContext(), "Location not found. Try being more specific.", Toast.LENGTH_LONG).show();
             }
@@ -290,6 +289,95 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
             Log.e("MapFragment", "Geocoder service not available", e);
             Toast.makeText(getContext(), "Could not connect to Geocoding service", Toast.LENGTH_LONG).show();
         }
+    }
+
+    private void fetchAlertTime(double centerX, double centerY) {
+        String url = "https://www.govmap.gov.il/api/layers-catalog/entitiesByPoint";
+        String jsonBody = "{" + "\"point\":[" + centerX + "," + centerY + "]," + "\"layers\":[{\"layerId\":\"427\"},{\"layerId\":\"417\"}]," + "\"tolerance\":277.8130556261113" + "}";
+        RequestBody body = RequestBody.create(jsonBody, MediaType.parse("application/json"));
+        Request request = new Request.Builder().url(url).post(body).addHeader("accept", "application/json, text/plain, */*").addHeader("content-type", "application/json").addHeader("accept-language", "he,he-IL;q=0.9,en-US;q=0.8,en;q=0.7").addHeader("referer", "https://www.govmap.gov.il/?z=6&c=180726.75,573949.65&lay=427,417&b=7&bs=427,417%7C179775.17,577426.46").build();
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                Log.e("MapFragment", "Error fetching alert time", e);
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> Toast.makeText(getContext(), "Could not connect to alert time service", Toast.LENGTH_LONG).show());
+                }
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                if (getActivity() == null) {
+                    return;
+                }
+                final String responseBody = response.body().string();
+                Log.d("MapFragment", "Alert time response: " + responseBody);
+
+                if (!response.isSuccessful()) {
+                    Log.e("MapFragment", "HTTP " + response.code());
+                    getActivity().runOnUiThread(() -> Toast.makeText(getContext(), "Could not connect to alert time service. Code: " + response.code(), Toast.LENGTH_LONG).show());
+                    return;
+                }
+
+                getActivity().runOnUiThread(() -> {
+                    try {
+                        int seconds = formatTime(responseBody);
+                        if (seconds > 0) {
+                            Toast.makeText(getContext(), "Alert time: " + seconds + " seconds", Toast.LENGTH_LONG).show();
+                        } else {
+                            Toast.makeText(getContext(), "Could not determine alert time.", Toast.LENGTH_SHORT).show();
+                        }
+                    } catch (JSONException e) {
+                        Log.e("MapFragment", "Error parsing alert time JSON", e);
+                        Toast.makeText(getContext(), "Error reading alert time data.", Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
+        });
+    }
+
+    private int formatTime(String json) throws JSONException {
+        JSONObject object = new JSONObject(json);
+        JSONArray dataArray = object.getJSONArray("data");
+
+        if (dataArray.length() > 0) {
+            // Assuming 'defensetimezones' is always the first object in the 'data' array
+            JSONObject defenseTimeZones = dataArray.getJSONObject(0);
+            JSONArray entitiesArray = defenseTimeZones.getJSONArray("entities");
+
+            if (entitiesArray.length() > 0) {
+                JSONObject firstEntity = entitiesArray.getJSONObject(0);
+                JSONArray fieldsArray = firstEntity.getJSONArray("fields");
+
+                if (fieldsArray.length() > 0) {
+                    // Assuming the time information is always the first field
+                    JSONObject timeField = fieldsArray.getJSONObject(0);
+                    String time = timeField.getString("fieldValue");
+
+                    if (time.contains("דקה וחצי")) {
+                        return 90;
+                    }
+                    if (time.contains("שלוש דקות")) {
+                        return 180;
+                    }
+                    if (time.contains("דקה")) {
+                        return 60;
+                    }
+                    if (time.contains("שניות")) {
+                        Pattern pattern = Pattern.compile("(\\d+)");
+                        Matcher matcher = pattern.matcher(time);
+                        if (matcher.find() && matcher.group(1) != null) {
+                            try {
+                                return Integer.parseInt(matcher.group(1));
+                            } catch (NumberFormatException e) {
+                                // Failed to parse, return 0
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return 0;
     }
 
     private double[] computeBbox(double centerX, double centerY, int width, int height, double metersPerPixelX, double metersPerPixelY) {
@@ -306,11 +394,11 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
 
 
     private void fetchWmsImage(double[] bbox, DotResultCallback callback) {
-        double minX=bbox[0], minY=bbox[1], maxX=bbox[2], maxY=bbox[3];
+        double minX = bbox[0], minY = bbox[1], maxX = bbox[2], maxY = bbox[3];
 
-        String url="https://www.govmap.gov.il/api/geoserver/ows/public/?"+"SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true"+"&LAYERS=govmap:layer_bombshelters&TILED=false&CRS=EPSG:3857"+"&STYLES=govmap:layer_bombshelters&FEATUREVERSION=1"+"&WIDTH="+mapView.getWidth()+"&HEIGHT="+mapView.getHeight()+"&BBOX="+minX+","+minY+","+maxX+","+maxY;
+        String url = "https://www.govmap.gov.il/api/geoserver/ows/public/?" + "SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true" + "&LAYERS=govmap:layer_bombshelters&TILED=false&CRS=EPSG:3857" + "&STYLES=govmap:layer_bombshelters&FEATUREVERSION=1" + "&WIDTH=" + mapView.getWidth() + "&HEIGHT=" + mapView.getHeight() + "&BBOX=" + minX + "," + minY + "," + maxX + "," + maxY;
 
-        Request request=new Request.Builder().url(url).addHeader("accept", "image/png,*/*;q=0.8").build();
+        Request request = new Request.Builder().url(url).addHeader("accept", "image/png,*/*;q=0.8").build();
 
         client.newCall(request).enqueue(new Callback() {
             @Override
@@ -321,17 +409,17 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
             @Override
             public void onResponse(Call call, Response response) throws IOException {
                 if (!response.isSuccessful()) {
-                    callback.onError(new IOException("HTTP "+response.code()));
+                    callback.onError(new IOException("HTTP " + response.code()));
                     return;
                 }
 
-                Bitmap bitmap=BitmapFactory.decodeStream(response.body().byteStream());
-                if (bitmap==null) {
+                Bitmap bitmap = BitmapFactory.decodeStream(response.body().byteStream());
+                if (bitmap == null) {
                     callback.onError(new IOException("Decode error"));
                     return;
                 }
 
-                List<DotDetector.Coord> dots=DotDetector.findDotCenters(bitmap, minX, minY, maxX, maxY);
+                List<DotDetector.Coord> dots = DotDetector.findDotCenters(bitmap, minX, minY, maxX, maxY);
 
                 callback.onDotsReady(dots);
             }
@@ -344,7 +432,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     @Override
     public void onResume() {
         super.onResume();
-        if (mapView!=null) {
+        if (mapView != null) {
             mapView.onResume();
         }
     }
@@ -352,7 +440,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     @Override
     public void onStart() {
         super.onStart();
-        if (mapView!=null) {
+        if (mapView != null) {
             mapView.onStart();
         }
     }
@@ -360,7 +448,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     @Override
     public void onStop() {
         super.onStop();
-        if (mapView!=null) {
+        if (mapView != null) {
             mapView.onStop();
         }
     }
@@ -368,7 +456,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     @Override
     public void onPause() {
         super.onPause();
-        if (mapView!=null) {
+        if (mapView != null) {
             mapView.onPause();
         }
     }
@@ -376,7 +464,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     @Override
     public void onDestroy() {
         super.onDestroy();
-        if (mapView!=null) {
+        if (mapView != null) {
             mapView.onDestroy();
         }
     }
@@ -384,7 +472,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     @Override
     public void onLowMemory() {
         super.onLowMemory();
-        if (mapView!=null) {
+        if (mapView != null) {
             mapView.onLowMemory();
         }
     }
@@ -392,7 +480,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     @Override
     public void onSaveInstanceState(@NonNull Bundle outState) {
         super.onSaveInstanceState(outState);
-        if (mapView!=null) {
+        if (mapView != null) {
             mapView.onSaveInstanceState(outState);
         }
     }
