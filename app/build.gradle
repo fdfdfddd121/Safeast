@@ -18,6 +18,14 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    packagingOptions {
+        resources {
+            excludes += '/META-INF/{AL2.0,LGPL2.1}'
+            pickFirsts += 'META-INF/DEPENDENCIES'
+            pickFirsts += 'META-INF/INDEX.LIST'
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
@@ -48,6 +56,7 @@ dependencies {
     implementation libs.lifecycle.viewmodel.ktx
     implementation libs.play.services.maps
     implementation "com.google.android.libraries.places:places:5.0.0"
+    implementation 'com.google.maps:google-maps-routing:1.63.0'
     implementation libs.gms.play.services.location
     implementation 'org.locationtech.proj4j:proj4j-epsg:1.4.1'
     implementation libs.locationtech.proj4j

@@ -1,21 +1,13 @@
 package com.app.safeast.fragments;
 
-import android.Manifest;
-import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.location.Address;
-import android.location.Geocoder;
 import android.os.Bundle;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -24,37 +16,16 @@ import android.widget.SearchView;
 import android.widget.Toast;
 
 import com.app.safeast.R;
-import com.app.safeast.helperFiles.DotDetector;
-import com.google.android.gms.location.FusedLocationProviderClient;
-import com.google.android.gms.location.LocationServices;
+import com.app.safeast.managers.NavigationManager;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.MapView;
 import com.google.android.gms.maps.OnMapReadyCallback;
-import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
-import com.google.android.gms.maps.model.MarkerOptions;
-import com.google.android.gms.maps.model.VisibleRegion;
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
 
-import java.io.IOException;
 import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Objects;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-import okhttp3.Call;
-import okhttp3.Callback;
-import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
 
 
 /**
@@ -69,9 +40,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     SearchView searchView;
     Button currLoc;
     HashMap<String, Marker> markers;
-    private final OkHttpClient client = new OkHttpClient();
-
-    private FusedLocationProviderClient fusedLocationClient;
+    private NavigationManager navManager;
     private ActivityResultLauncher<String> locationPermissionRequest;
 
     // TODO: Rename parameter arguments, choose names that match
@@ -90,22 +59,17 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
      */
     // TODO: Rename and change types and number of parameters
     public static MapFragment newInstance() {
-        MapFragment fragment = new MapFragment();
-        return fragment;
+        return new MapFragment();
     }
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        // ADD THIS INITIALIZATION BLOCK
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity());
-
         // This handles the result of the permission request
         locationPermissionRequest = registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
             if (isGranted) {
                 // Permission is granted. Try to get the location again.
-                sheltersNearGPS();
+                    navManager.sheltersNearGPS(locationPermissionRequest, mapView, getActivity());
             } else {
                 // Permission is denied. Show a message to the user.
                 Toast.makeText(getContext(), "Location permission denied. Cannot get current location.", Toast.LENGTH_LONG).show();
@@ -144,7 +108,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
             @Override
             public boolean onQueryTextSubmit(String query) {
-                sheltersNearSearch();
+                navManager.sheltersNearSearch(searchView,mapView,getActivity());
                 searchView.clearFocus();
                 return true;
             }
@@ -160,7 +124,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
 
         // 1. For the "Current Location" button
         currLoc.setOnClickListener(v -> {
-            sheltersNearGPS();
+                navManager.sheltersNearGPS(locationPermissionRequest, mapView, getActivity());
         });
     }
 
@@ -177,254 +141,10 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         // Let's place a default marker on Beer Sheva and move the camera
         LatLng beerSheva = new LatLng(31.2530, 34.7915);
         googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(beerSheva, 12));
+        navManager = new NavigationManager(requireActivity(), googleMap);
+
     }
 
-    private void sheltersNearGPS() {
-        // First, check if we have permission to access location
-        clearMarkers();
-        if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            // You have permission. Get the location.
-            fusedLocationClient.getLastLocation().addOnSuccessListener(requireActivity(), location -> {
-                if (location != null) {
-                    // Location found. Create a LatLng object.
-                    LatLng currentLatLng = new LatLng(location.getLatitude(), location.getLongitude());
-                    // Clear previous markers, add a new one, and move the camera
-                    googleMap.clear();
-                    markers.put("USER", googleMap.addMarker(new MarkerOptions().position(currentLatLng).title("USER")));
-                    googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 15f)); // Zoom in closer
-                    getShelters();
-                } else {
-                    Toast.makeText(getContext(), "Could not get location. Make sure location is enabled on the device.", Toast.LENGTH_LONG).show();
-                }
-            });
-        } else {
-            // You do not have permission. Request it from the user.
-            locationPermissionRequest.launch(Manifest.permission.ACCESS_FINE_LOCATION);
-        }
-    }
-
-    private void clearMarkers() {
-        if (!markers.isEmpty()) {
-            for (Marker marker : markers.values()) {
-                marker.remove();
-            }
-            markers.clear();
-        }
-    }
-
-    private void getShelters() {
-        LatLng center = markers.get("USER").getPosition();
-        DotDetector.Coord centerWPS = DotDetector.convertEPSG(center.longitude, center.latitude, DotDetector.EPSG.GPS.getLabel(), DotDetector.EPSG.WPS.getLabel());
-        double centerY = centerWPS.mapY;
-        double centerX = centerWPS.mapX;
-
-        int width = mapView.getWidth();
-        int height = mapView.getHeight();
-
-        double earthRadius = 6378137; // meters
-        VisibleRegion vRegion = googleMap.getProjection().getVisibleRegion();
-        LatLng ne = vRegion.farRight;
-        LatLng sw = vRegion.nearLeft;
-
-        // Convert both corners to EPSG:3857
-        DotDetector.Coord neMeters = DotDetector.convertEPSG(ne.longitude, ne.latitude, DotDetector.EPSG.GPS.getLabel(), DotDetector.EPSG.WPS.getLabel());
-        DotDetector.Coord swMeters = DotDetector.convertEPSG(sw.longitude, sw.latitude, DotDetector.EPSG.GPS.getLabel(), DotDetector.EPSG.WPS.getLabel());
-
-        // Compute meters per pixel
-        double metersPerPixelX = (neMeters.mapX - swMeters.mapX) / width;
-        double metersPerPixelY = (neMeters.mapY - swMeters.mapY) / height;
-
-        // Compute bbox
-        double[] bbox = computeBbox(centerX, centerY, width, height, metersPerPixelX, metersPerPixelY);
-        fetchAlertTime(centerX, centerY);
-        fetchWmsImage(bbox, new DotResultCallback() {
-            @Override
-            public void onDotsReady(List<DotDetector.Coord> dots) {
-                if (getActivity() == null) return;
-                getActivity().runOnUiThread(() -> {
-                    int i = 0;
-                    for (DotDetector.Coord dot : dots) {
-                        LatLng dotLatLng = new LatLng(dot.mapY, dot.mapX);
-                        markers.put("shelter" + i, googleMap.addMarker(new MarkerOptions().position(dotLatLng).title("shelter" + i).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))));
-                        i++;
-                    }
-                });
-            }
-
-            @Override
-            public void onError(Exception e) {
-                Log.e("MapFragment", "Error fetching WMS image", e);
-            }
-        });
-    }
-
-
-    private void sheltersNearSearch() {
-        String locationName = searchView.getQuery().toString();
-        if (locationName.isEmpty()) {
-            Toast.makeText(getContext(), "Please enter a location to search", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        clearMarkers();
-        // Geocoder can be slow and should ideally be run in a background thread,
-        // but for simplicity, we'll do it on the main thread here.
-        Geocoder geocoder = new Geocoder(getContext(), Locale.getDefault());
-        try {
-            // getFromLocationName() returns a list of possible addresses. We take the first one.
-            List<Address> addressList = geocoder.getFromLocationName(locationName, 1);
-            if (addressList != null && !addressList.isEmpty()) {
-                Address address = addressList.get(0);
-                LatLng searchedLatLng = new LatLng(address.getLatitude(), address.getLongitude());
-
-                // Clear previous markers, add a new one, and move the camera
-                googleMap.clear();
-                markers.put("USER", googleMap.addMarker(new MarkerOptions().position(searchedLatLng).title("USER")));
-                googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(searchedLatLng, 15f));
-                getShelters();
-            } else {
-                // No address found
-                Toast.makeText(getContext(), "Location not found. Try being more specific.", Toast.LENGTH_LONG).show();
-            }
-        } catch (IOException e) {
-            Log.e("MapFragment", "Geocoder service not available", e);
-            Toast.makeText(getContext(), "Could not connect to Geocoding service", Toast.LENGTH_LONG).show();
-        }
-    }
-
-    private void fetchAlertTime(double centerX, double centerY) {
-        String url = "https://www.govmap.gov.il/api/layers-catalog/entitiesByPoint";
-        String jsonBody = "{" + "\"point\":[" + centerX + "," + centerY + "]," + "\"layers\":[{\"layerId\":\"427\"},{\"layerId\":\"417\"}]," + "\"tolerance\":277.8130556261113" + "}";
-        RequestBody body = RequestBody.create(jsonBody, MediaType.parse("application/json"));
-        Request request = new Request.Builder().url(url).post(body).addHeader("accept", "application/json, text/plain, */*").addHeader("content-type", "application/json").addHeader("accept-language", "he,he-IL;q=0.9,en-US;q=0.8,en;q=0.7").addHeader("referer", "https://www.govmap.gov.il/?z=6&c=180726.75,573949.65&lay=427,417&b=7&bs=427,417%7C179775.17,577426.46").build();
-        client.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                Log.e("MapFragment", "Error fetching alert time", e);
-                if (getActivity() != null) {
-                    getActivity().runOnUiThread(() -> Toast.makeText(getContext(), "Could not connect to alert time service", Toast.LENGTH_LONG).show());
-                }
-            }
-
-            @Override
-            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                if (getActivity() == null) {
-                    return;
-                }
-                final String responseBody = response.body().string();
-                Log.d("MapFragment", "Alert time response: " + responseBody);
-
-                if (!response.isSuccessful()) {
-                    Log.e("MapFragment", "HTTP " + response.code());
-                    getActivity().runOnUiThread(() -> Toast.makeText(getContext(), "Could not connect to alert time service. Code: " + response.code(), Toast.LENGTH_LONG).show());
-                    return;
-                }
-
-                getActivity().runOnUiThread(() -> {
-                    try {
-                        int seconds = formatTime(responseBody);
-                        if (seconds > 0) {
-                            Toast.makeText(getContext(), "Alert time: " + seconds + " seconds", Toast.LENGTH_LONG).show();
-                        } else {
-                            Toast.makeText(getContext(), "Could not determine alert time.", Toast.LENGTH_SHORT).show();
-                        }
-                    } catch (JSONException e) {
-                        Log.e("MapFragment", "Error parsing alert time JSON", e);
-                        Toast.makeText(getContext(), "Error reading alert time data.", Toast.LENGTH_SHORT).show();
-                    }
-                });
-            }
-        });
-    }
-
-    private int formatTime(String json) throws JSONException {
-        JSONObject object = new JSONObject(json);
-        JSONArray dataArray = object.getJSONArray("data");
-
-        if (dataArray.length() > 0) {
-            // Assuming 'defensetimezones' is always the first object in the 'data' array
-            JSONObject defenseTimeZones = dataArray.getJSONObject(0);
-            JSONArray entitiesArray = defenseTimeZones.getJSONArray("entities");
-
-            if (entitiesArray.length() > 0) {
-                JSONObject firstEntity = entitiesArray.getJSONObject(0);
-                JSONArray fieldsArray = firstEntity.getJSONArray("fields");
-
-                if (fieldsArray.length() > 0) {
-                    // Assuming the time information is always the first field
-                    JSONObject timeField = fieldsArray.getJSONObject(0);
-                    String time = timeField.getString("fieldValue");
-
-                    if (time.contains("דקה וחצי")) {
-                        return 90;
-                    }
-                    if (time.contains("שלוש דקות")) {
-                        return 180;
-                    }
-                    if (time.contains("דקה")) {
-                        return 60;
-                    }
-                    if (time.contains("שניות")) {
-                        Pattern pattern = Pattern.compile("(\\d+)");
-                        Matcher matcher = pattern.matcher(time);
-                        if (matcher.find() && matcher.group(1) != null) {
-                            try {
-                                return Integer.parseInt(matcher.group(1));
-                            } catch (NumberFormatException e) {
-                                // Failed to parse, return 0
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return 0;
-    }
-
-    private double[] computeBbox(double centerX, double centerY, int width, int height, double metersPerPixelX, double metersPerPixelY) {
-        double halfWidth = width * metersPerPixelX / 2.0;
-        double halfHeight = height * metersPerPixelY / 2.0;
-        return new double[]{centerX - halfWidth, centerY - halfHeight, centerX + halfWidth, centerY + halfHeight};
-    }
-
-    public interface DotResultCallback {
-        void onDotsReady(List<DotDetector.Coord> dots);
-
-        void onError(Exception e);
-    }
-
-
-    private void fetchWmsImage(double[] bbox, DotResultCallback callback) {
-        double minX = bbox[0], minY = bbox[1], maxX = bbox[2], maxY = bbox[3];
-
-        String url = "https://www.govmap.gov.il/api/geoserver/ows/public/?" + "SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true" + "&LAYERS=govmap:layer_bombshelters&TILED=false&CRS=EPSG:3857" + "&STYLES=govmap:layer_bombshelters&FEATUREVERSION=1" + "&WIDTH=" + mapView.getWidth() + "&HEIGHT=" + mapView.getHeight() + "&BBOX=" + minX + "," + minY + "," + maxX + "," + maxY;
-
-        Request request = new Request.Builder().url(url).addHeader("accept", "image/png,*/*;q=0.8").build();
-
-        client.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
-                callback.onError(e);
-            }
-
-            @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                if (!response.isSuccessful()) {
-                    callback.onError(new IOException("HTTP " + response.code()));
-                    return;
-                }
-
-                Bitmap bitmap = BitmapFactory.decodeStream(response.body().byteStream());
-                if (bitmap == null) {
-                    callback.onError(new IOException("Decode error"));
-                    return;
-                }
-
-                List<DotDetector.Coord> dots = DotDetector.findDotCenters(bitmap, minX, minY, maxX, maxY);
-
-                callback.onDotsReady(dots);
-            }
-        });
-    }
 
 
     // --- ADD ALL OF THE FOLLOWING METHODS FOR MAP LIFECYCLE MANAGEMENT ---
