@@ -16,6 +16,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
 
+import com.app.safeast.BuildConfig;
 import com.app.safeast.R;
 import com.app.safeast.helperFiles.DotDetector;
 import com.app.safeast.objects.Shelter;
@@ -29,10 +30,7 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.VisibleRegion;
 import com.google.android.gms.location.FusedLocationProviderClient;
-import com.google.maps.routing.v2.ComputeRoutesRequest;
-import com.google.maps.routing.v2.ComputeRoutesResponse;
-import com.google.maps.routing.v2.RouteTravelMode;
-import com.google.maps.routing.v2.RoutesClient;
+import com.google.maps.routing.v2.*;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -45,9 +43,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -65,6 +65,9 @@ public class NavigationManager {
     private HashMap<Integer, Shelter> shelterMap;
     private UserMarker user;
     private FusedLocationProviderClient fusedLocationClient;
+
+    private volatile boolean alertTimeFetched = false;
+    private final Object alertTimeLock = new Object();
 
 
     public NavigationManager(Context context, GoogleMap googleMap) {
@@ -92,7 +95,7 @@ public class NavigationManager {
                     } else {
                         user.setLocation(currentLatLng, googleMap);
                     }
-                    googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 15f)); // Zoom in closer
+                    googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 16f)); // Zoom in closer
                     getShelters(mapView, activity);
                 } else {
                     Toast.makeText(context, "Could not get location. Make sure location is enabled on the device.", Toast.LENGTH_LONG).show();
@@ -128,7 +131,7 @@ public class NavigationManager {
                 } else {
                     user.setLocation(searchedLatLng, googleMap);
                 }
-                googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(searchedLatLng, 15f));
+                googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(searchedLatLng, 16f));
                 getShelters(mapView, activity);
             } else {
                 // No address found
@@ -148,6 +151,7 @@ public class NavigationManager {
             shelterMap.clear();
             user.getMarker().remove();
         }
+        Shelter.resetCount();
     }
 
 
@@ -172,7 +176,24 @@ public class NavigationManager {
 
         double[] bbox = computeBbox(centerX, centerY, width, height, metersPerPixelX, metersPerPixelY);
 
-        fetchAlertTime(centerX, centerY, activity);
+        fetchAlertTime(centerX, centerY, activity, new AlertTimeCallback() {
+            @Override
+            public void onTimeFetched(int seconds) {
+                synchronized (alertTimeLock) {
+                    alertTimeFetched = true;
+                    alertTimeLock.notifyAll();
+                }
+                Log.d("NavigationManager", "Alert time fetched: " + seconds);
+            }
+            @Override
+            public void onError(String message) {
+                synchronized (alertTimeLock) {
+                    alertTimeFetched = true;
+                    alertTimeLock.notifyAll();
+                }
+                Log.e("NavigationManager", "Error fetching alert time: " + message);
+            }
+        });
 
         fetchWmsImage(bbox, mapView, new DotResultCallback() {
             @Override
@@ -185,7 +206,56 @@ public class NavigationManager {
                         shelterMap.put(shelter.getId(), shelter);
                     }
                     Log.d("NavigationManager", "Added " + shelterMap.size() + " shelters. Filtering...");
+                    filterShelters(activity, new ShelterFilterCallback() {
+                        @Override
+                        public void onSheltersFiltered(List<ShelterResult> reachableShelters) {
+                            if (!reachableShelters.isEmpty()) {
+                                ShelterResult nearest = reachableShelters.get(0);
+                                Set<Integer> reachableIds = reachableShelters.stream().map(s -> s.shelter.getId()).collect(Collectors.toSet());
 
+                                // Color all reachable shelters blue
+                                for (ShelterResult result : reachableShelters) {
+                                    result.shelter.getMarker().setIcon(
+                                            BitmapDescriptorFactory.defaultMarker(
+                                                    200));
+                                    result.shelter.getMarker().setTitle(
+                                            result.shelter.getName() + " - " +
+                                                    result.getFormattedTime());
+                                }
+
+                                for (Shelter shelter : shelterMap.values()) {
+                                    if(!reachableIds.contains(shelter.getId()))
+                                    {
+                                        shelter.remove();
+                                    }
+                                }
+
+                                // Color nearest green and show info
+                                nearest.shelter.getMarker().setIcon(
+                                        BitmapDescriptorFactory.defaultMarker(
+                                                BitmapDescriptorFactory.HUE_GREEN));
+                                nearest.shelter.getMarker().showInfoWindow();
+
+                                Toast.makeText(context,
+                                        "Nearest: " + nearest.getFormattedTime() +
+                                                " (" + nearest.getFormattedDistance() + ")",
+                                        Toast.LENGTH_LONG).show();
+                            } else {
+                                Toast.makeText(context,
+                                        "⚠️ No shelters reachable within " +
+                                                user.getReactionTimeSec() + "s!",
+                                        Toast.LENGTH_LONG).show();
+                            }
+                        }
+
+                        @Override
+                        public void onError(Exception e) {
+                            Toast.makeText(context,
+                                    "Error filtering: " + e.getMessage(),
+                                    Toast.LENGTH_SHORT).show();
+                            Log.e("NavigationManager", "Filter error: " + e.getMessage());
+                        }
+                    });
                 });
             }
             @Override
@@ -201,24 +271,48 @@ public interface DotResultCallback {
 
     void onError(Exception e);
 }
-    private static class ShelterResult implements Comparable<ShelterResult> {
-        Shelter shelter;
-        int travelTime;
-        double distance;
+
+    public interface ShelterFilterCallback {
+        void onSheltersFiltered(List<ShelterResult> reachableShelters);
+        void onError(Exception e);
+    }
+
+    // Make ShelterResult public so callback can use it
+    public static class ShelterResult implements Comparable<ShelterResult> {
+        public Shelter shelter;
+        public int travelTime;
+        public double distance;
 
         public ShelterResult(Shelter shelter, int travelTime, double distance) {
             this.shelter = shelter;
             this.travelTime = travelTime;
             this.distance = distance;
         }
+
         public Shelter getShelter() {
             return shelter;
         }
+
         public int getTravelTime() {
             return travelTime;
         }
+
         public double getDistance() {
             return distance;
+        }
+
+        public String getFormattedTime() {
+            int minutes = travelTime / 60;
+            int seconds = travelTime % 60;
+            return minutes + ":" + String.format("%02d", seconds);
+        }
+
+        public String getFormattedDistance() {
+            if (distance < 1000) {
+                return (int)distance + "m";
+            } else {
+                return String.format("%.1f", distance / 1000.0) + "km";
+            }
         }
 
         @Override
@@ -228,6 +322,98 @@ public interface DotResultCallback {
     }
 
 
+    public void filterShelters(Activity activity, ShelterFilterCallback callback) {
+        new Thread(() -> {
+            // Wait for alert time to complete
+            synchronized (alertTimeLock) {
+                long startTime = System.currentTimeMillis();
+                while (!alertTimeFetched && (System.currentTimeMillis() - startTime) < 10000) {
+                    try {
+                        alertTimeLock.wait(10000);
+                    } catch (InterruptedException e) {
+                        activity.runOnUiThread(() ->
+                                callback.onError(new Exception("Interrupted")));
+                        return;
+                    }
+                }
+            }
+
+            if (!alertTimeFetched) {
+                activity.runOnUiThread(() ->
+                        callback.onError(new Exception("Alert time timeout")));
+                return;
+            }
+
+            if (user == null || user.getReactionTimeSec() <= 0) {
+                activity.runOnUiThread(() ->
+                        callback.onError(new Exception("Alert time not available")));
+                return;
+            }
+            if (shelterMap.isEmpty()) {
+                activity.runOnUiThread(() ->
+                        callback.onError(new Exception("No shelters loaded")));
+                return;
+            }
+
+            Log.d("NavigationManager", "Filtering " + shelterMap.size() +
+                    " shelters with " + user.getReactionTimeSec() + "s limit");
+
+            List<ShelterResult> results = Collections.synchronizedList(new ArrayList<>());
+            List<Thread> threads = new ArrayList<>();
+
+            // Process shelters in parallel (6 threads)
+            List<Shelter> shelterList = new ArrayList<>(shelterMap.values());
+            int threadsCount = 6;
+            int sheltersPerThread = (int) Math.ceil((double) shelterList.size() / threadsCount);
+
+            for (int i = 0; i < threadsCount; i++) {
+                int start = i * sheltersPerThread;
+                int end = Math.min(start + sheltersPerThread, shelterList.size());
+
+                if (start >= shelterList.size()) break;
+
+                List<Shelter> threadShelters = shelterList.subList(start, end);
+
+                Thread thread = new Thread(() -> {
+                    for (Shelter shelter : threadShelters) {
+                        try {
+                            ShelterResult result = calculateRoute(user.getLocation(), shelter);
+
+                            if (result != null && result.getTravelTime() <= user.getReactionTimeSec()*2) {
+                                results.add(result);
+                                Log.d("ShelterFinder", "Reachable: " +
+                                        shelter.getName() + " - " + result.getFormattedTime());
+                            }
+                        } catch (Exception e) {
+                            Log.e("ShelterFinder", "Error processing " +
+                                    shelter.getName() + ": " + e.getMessage());
+                        }
+                    }
+                });
+
+                threads.add(thread);
+                thread.start();
+            }
+
+            // Wait for all threads to complete
+            for (Thread thread : threads) {
+                try {
+                    thread.join(10000); // 10 second timeout per thread
+                } catch (InterruptedException e) {
+                    Log.e("ShelterFinder", "Thread interrupted: " + e.getMessage());
+                }
+            }
+
+            // Sort results by travel time
+            Collections.sort(results);
+
+            Log.d("ShelterFinder", "Found " + results.size() + "/" +
+                    shelterMap.size() + " reachable shelters");
+
+            activity.runOnUiThread(() -> callback.onSheltersFiltered(results));
+
+        }).start();
+    }
 
 
 
@@ -235,7 +421,6 @@ public interface DotResultCallback {
      * Calculate route using Google Directions API
      */
     private ShelterResult calculateRoute(LatLng origin, Shelter shelter) {
-
         try {
             LatLng destination = shelter.getLocation();
 
@@ -244,11 +429,10 @@ public interface DotResultCallback {
                     "origin=" + origin.latitude + "," + origin.longitude +
                     "&destination=" + destination.latitude + "," + destination.longitude +
                     "&mode=walking" +
-                    "&key=" + context.getPackageManager().getApplicationInfo(context.getPackageName(),PackageManager.GET_META_DATA).metaData.getString("MAPS_API_KEY");
+                    "&key=" + BuildConfig.DIRECTIONS_API_KEY;
 
             Request request = new Request.Builder()
                     .url(urlString)
-                    .addHeader("accept", "application/json")
                     .build();
 
             // Synchronous call (we're already in a background thread)
@@ -263,7 +447,8 @@ public interface DotResultCallback {
                 String status = json.getString("status");
 
                 if (!status.equals("OK")) {
-                    Log.w("ShelterFinder", "API returned status: " + status);
+                    String errorMessage = json.optString("error_message", "Unknown error");
+                    Log.e("ShelterFinder", "Directions API failed with status: " + status + ". Message: " + errorMessage);
                     return null;
                 }
 
@@ -289,7 +474,14 @@ public interface DotResultCallback {
         }
     }
 
-    private void fetchAlertTime(double centerX, double centerY, Activity activity) {
+    public interface AlertTimeCallback {
+        void onTimeFetched(int seconds);
+        void onError(String message);
+    }
+
+
+    private void fetchAlertTime(double centerX, double centerY, Activity activity, AlertTimeCallback callback) {
+        alertTimeFetched = false; // Reset flag
         String url = "https://www.govmap.gov.il/api/layers-catalog/entitiesByPoint";
         String jsonBody = "{" + "\"point\":[" + centerX + "," + centerY + "]," + "\"layers\":[{\"layerId\":\"427\"},{\"layerId\":\"417\"}]," + "\"tolerance\":277.8130556261113" + "}";
         RequestBody body = RequestBody.create(jsonBody, MediaType.parse("application/json"));
@@ -299,7 +491,9 @@ public interface DotResultCallback {
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 Log.e("MapFragment", "Error fetching alert time", e);
                 if (activity != null) {
-                    activity.runOnUiThread(() -> Toast.makeText(context, "Could not connect to alert time service", Toast.LENGTH_LONG).show());
+                    activity.runOnUiThread(() -> {Toast.makeText(context, "Could not connect to alert time service", Toast.LENGTH_LONG).show();
+                    if(callback != null) callback.onError(e.getMessage());
+                    });
                 }
             }
 
@@ -323,10 +517,13 @@ public interface DotResultCallback {
                         if (seconds > -1) {
                             user.setReactionTimeSec(seconds);
                             Toast.makeText(context, "Alert time: " + seconds + " seconds", Toast.LENGTH_LONG).show();
+                            if(callback != null) callback.onTimeFetched(seconds);
                         } else {
                             Toast.makeText(context, "Could not determine alert time.", Toast.LENGTH_SHORT).show();
+                            if(callback != null) callback.onError("Could not determine alert time.");
                         }
                     } catch (JSONException e) {
+                        if (callback != null) callback.onError("JSON Error");
                         Log.e("MapFragment", "Error parsing alert time JSON", e);
                         Toast.makeText(context, "Error reading alert time data.", Toast.LENGTH_SHORT).show();
                     }

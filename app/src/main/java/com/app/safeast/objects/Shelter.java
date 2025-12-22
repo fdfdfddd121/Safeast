@@ -47,6 +47,11 @@ public class Shelter /*implements AutoCloseable*/ {
         }
     }
 
+    public static void resetCount()
+    {
+        counter = 0;
+    }
+
 
 /*    public void close()
     {
