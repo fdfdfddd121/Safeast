@@ -3,6 +3,10 @@ package com.app.safeast.helperFiles;
 import android.graphics.Bitmap;
 import android.util.Log;
 
+import com.google.android.gms.maps.CameraUpdateFactory;
+import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.model.LatLng;
+
 import org.locationtech.proj4j.CRSFactory;
 import org.locationtech.proj4j.CoordinateReferenceSystem;
 import org.locationtech.proj4j.CoordinateTransform;
@@ -15,7 +19,7 @@ import java.util.List;
 import java.util.Map;
 
 
-public class DotDetector {
+public class MapHelper {
 
     public enum EPSG {ISRAEL("EPSG:2039"), WPS("EPSG:3857"), GPS("EPSG:4326");
    private final String label;
@@ -197,5 +201,74 @@ public class DotDetector {
         return (r > 180 && g < 150 && b < 150) ||  // red
                 (r > 220 && g > 220 && b > 220);    // white
     }
+
+
+    private static com.google.android.gms.maps.model.Polyline currentPolyline;
+
+    public static void drawRouteOnMap(List<LatLng> points, LatLng origin, LatLng dest, GoogleMap googleMap) {
+        // Remove old line if exists
+        if (currentPolyline != null) {
+            currentPolyline.remove();
+        }
+
+        // Draw new blue line
+        com.google.android.gms.maps.model.PolylineOptions lineOptions =
+                new com.google.android.gms.maps.model.PolylineOptions();
+        lineOptions.addAll(points);
+        lineOptions.width(15);
+        lineOptions.color(android.graphics.Color.BLUE);
+        lineOptions.geodesic(true);
+
+        currentPolyline = googleMap.addPolyline(lineOptions);
+
+        // Zoom camera to fit route
+        com.google.android.gms.maps.model.LatLngBounds.Builder builder =
+                new com.google.android.gms.maps.model.LatLngBounds.Builder();
+        builder.include(origin);
+        builder.include(dest);
+
+        // Add a few points from the route to ensure curve fits
+        for(LatLng p : points) builder.include(p);
+
+        try {
+            googleMap.animateCamera(CameraUpdateFactory.newLatLngBounds(builder.build(), 150));
+        } catch (Exception e) {
+            Log.e("NavigationManager", "Map layout not ready");
+        }
+    }
+
+    public static List<LatLng> decodePoly(String encoded) {
+        List<LatLng> poly = new ArrayList<>();
+        int index = 0, len = encoded.length();
+        int lat = 0, lng = 0;
+
+        while (index < len) {
+            int b, shift = 0, result = 0;
+            do {
+                b = encoded.charAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            int dlat = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
+            lat += dlat;
+
+            shift = 0;
+            result = 0;
+            do {
+                b = encoded.charAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            int dlng = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
+            lng += dlng;
+
+            LatLng p = new LatLng((((double) lat / 1E5)),
+                    (((double) lng / 1E5)));
+            poly.add(p);
+        }
+        return poly;
+    }
+
+
 }
 

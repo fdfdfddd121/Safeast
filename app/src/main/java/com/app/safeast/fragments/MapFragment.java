@@ -25,6 +25,8 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 
 import java.util.HashMap;
+import java.util.Objects;
+
 import okhttp3.OkHttpClient;
 
 
@@ -33,15 +35,17 @@ import okhttp3.OkHttpClient;
  * Use the {@link MapFragment#newInstance} factory method to
  * create an instance of this fragment.
  */
-public class MapFragment extends Fragment implements OnMapReadyCallback {
+public class MapFragment extends Fragment implements OnMapReadyCallback, GoogleMap.OnMarkerClickListener {
 
     MapView mapView;
     GoogleMap googleMap;
     SearchView searchView;
     Button currLoc;
+    Button getDir;
     HashMap<String, Marker> markers;
     private NavigationManager navManager;
     private ActivityResultLauncher<String> locationPermissionRequest;
+    private Marker selectedMarker = null;
 
     // TODO: Rename parameter arguments, choose names that match
     // the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
@@ -90,6 +94,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
 
         mapView = view.findViewById(R.id.mapView);
         currLoc = view.findViewById(R.id.currLoc);
+        getDir = view.findViewById(R.id.getDir);
         searchView = view.findViewById(R.id.searchView);
         markers = new HashMap<>();
         if (mapView != null) {
@@ -126,6 +131,10 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         currLoc.setOnClickListener(v -> {
                 navManager.sheltersNearGPS(locationPermissionRequest, mapView, getActivity());
         });
+
+        getDir.setOnClickListener(view1 -> {
+            navManager.giveDirections(selectedMarker);
+        });
     }
 
     /**
@@ -137,6 +146,17 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
 
         // You can customize the map here
         googleMap.getUiSettings().setZoomControlsEnabled(true); // Show zoom buttons
+        googleMap.getUiSettings().setAllGesturesEnabled(true);
+
+        googleMap.setOnMarkerClickListener(this);
+        googleMap.setOnMapClickListener(new GoogleMap.OnMapClickListener() {
+            @Override
+            public void onMapClick(@NonNull LatLng latLng) {
+                selectedMarker = null;
+                currLoc.setVisibility(View.VISIBLE);
+                getDir.setVisibility(View.GONE);
+            }
+        });
 
         // Let's place a default marker on Beer Sheva and move the camera
         LatLng beerSheva = new LatLng(31.2530, 34.7915);
@@ -206,4 +226,15 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     }
 
 
+    @Override
+    public boolean onMarkerClick(@NonNull Marker marker) {
+        if (Objects.equals(marker.getTitle(), "USER"))
+        {
+            return false;
+        }
+        selectedMarker = marker;
+        currLoc.setVisibility(View.GONE);
+        getDir.setVisibility(View.VISIBLE);
+        return false;
+    }
 }

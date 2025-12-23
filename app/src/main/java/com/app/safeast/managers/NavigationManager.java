@@ -17,8 +17,7 @@ import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
 
 import com.app.safeast.BuildConfig;
-import com.app.safeast.R;
-import com.app.safeast.helperFiles.DotDetector;
+import com.app.safeast.helperFiles.MapHelper;
 import com.app.safeast.objects.Shelter;
 import com.app.safeast.objects.UserMarker;
 import com.google.android.gms.location.LocationServices;
@@ -44,7 +43,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -77,6 +75,73 @@ public class NavigationManager {
         this.shelterMap = new HashMap<>();
         this.user = null;
         this.fusedLocationClient = LocationServices.getFusedLocationProviderClient(context);
+    }
+
+    public void giveDirections(Marker destMarker) {
+        if (destMarker == null || googleMap == null || user == null) {
+            Log.e("NavigationManager", "Cannot give directions: missing data");
+            return;
+        }
+
+        LatLng origin = user.getLocation();
+        LatLng destination = destMarker.getPosition();
+
+        String apiKey = com.app.safeast.BuildConfig.DIRECTIONS_API_KEY;
+        String urlString = "https://maps.googleapis.com/maps/api/directions/json?" +
+                "origin=" + origin.latitude + "," + origin.longitude +
+                "&destination=" + destination.latitude + "," + destination.longitude +
+                "&mode=walking" +
+                "&key=" + apiKey;
+
+        Request request = new Request.Builder().url(urlString).build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                Log.e("NavigationManager", "Failed to fetch directions", e);
+                if (context instanceof Activity) {
+                    ((Activity) context).runOnUiThread(() ->
+                            Toast.makeText(context, "Failed to load directions", Toast.LENGTH_SHORT).show()
+                    );
+                }
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                if (!response.isSuccessful()) return;
+
+                try {
+                    String responseBody = response.body().string();
+                    JSONObject json = new JSONObject(responseBody);
+                    String status = json.getString("status");
+
+                    if (!status.equals("OK")) {
+                        Log.e("NavigationManager", "Directions API Error: " + status);
+                        return;
+                    }
+
+                    // 4. Extract the Polyline String
+                    JSONArray routes = json.getJSONArray("routes");
+                    if (routes.length() > 0) {
+                        JSONObject route = routes.getJSONObject(0);
+                        JSONObject overviewPolyline = route.getJSONObject("overview_polyline");
+                        String encodedString = overviewPolyline.getString("points");
+
+                        // 5. Decode and Draw on Main Thread
+                        List<LatLng> points = MapHelper.decodePoly(encodedString);
+
+                        if (context instanceof Activity) {
+                            ((Activity) context).runOnUiThread(() -> {
+                               MapHelper.drawRouteOnMap(points, origin, destination,googleMap);
+                            });
+                        }
+                    }
+
+                } catch (JSONException e) {
+                    Log.e("NavigationManager", "JSON Error", e);
+                }
+            }
+        });
     }
 
 
@@ -157,7 +222,7 @@ public class NavigationManager {
 
     private void getShelters(MapView mapView, Activity activity) {
         LatLng center = user.getLocation();
-        DotDetector.Coord centerWPS = DotDetector.convertEPSG(center.longitude, center.latitude, DotDetector.EPSG.GPS.getLabel(), DotDetector.EPSG.WPS.getLabel());
+        MapHelper.Coord centerWPS = MapHelper.convertEPSG(center.longitude, center.latitude, MapHelper.EPSG.GPS.getLabel(), MapHelper.EPSG.WPS.getLabel());
         double centerY = centerWPS.mapY;
         double centerX = centerWPS.mapX;
 
@@ -168,8 +233,8 @@ public class NavigationManager {
         LatLng ne = vRegion.farRight;
         LatLng sw = vRegion.nearLeft;
 
-        DotDetector.Coord neMeters = DotDetector.convertEPSG(ne.longitude, ne.latitude, DotDetector.EPSG.GPS.getLabel(), DotDetector.EPSG.WPS.getLabel());
-        DotDetector.Coord swMeters = DotDetector.convertEPSG(sw.longitude, sw.latitude, DotDetector.EPSG.GPS.getLabel(), DotDetector.EPSG.WPS.getLabel());
+        MapHelper.Coord neMeters = MapHelper.convertEPSG(ne.longitude, ne.latitude, MapHelper.EPSG.GPS.getLabel(), MapHelper.EPSG.WPS.getLabel());
+        MapHelper.Coord swMeters = MapHelper.convertEPSG(sw.longitude, sw.latitude, MapHelper.EPSG.GPS.getLabel(), MapHelper.EPSG.WPS.getLabel());
 
         double metersPerPixelX = (neMeters.mapX - swMeters.mapX) / width;
         double metersPerPixelY = (neMeters.mapY - swMeters.mapY) / height;
@@ -197,10 +262,10 @@ public class NavigationManager {
 
         fetchWmsImage(bbox, mapView, new DotResultCallback() {
             @Override
-            public void onDotsReady(List<DotDetector.Coord> dots) {
+            public void onDotsReady(List<MapHelper.Coord> dots) {
                 if (activity == null) return;
                 activity.runOnUiThread(() -> {
-                    for (DotDetector.Coord dot : dots) {
+                    for (MapHelper.Coord dot : dots) {
                         LatLng dotLatLng = new LatLng(dot.mapY, dot.mapX);
                         Shelter shelter = new Shelter(dotLatLng, googleMap);
                         shelterMap.put(shelter.getId(), shelter);
@@ -267,7 +332,7 @@ public class NavigationManager {
 
 
 public interface DotResultCallback {
-    void onDotsReady(List<DotDetector.Coord> dots);
+    void onDotsReady(List<MapHelper.Coord> dots);
 
     void onError(Exception e);
 }
@@ -609,7 +674,7 @@ public interface DotResultCallback {
                     return;
                 }
 
-                List<DotDetector.Coord> dots = DotDetector.findDotCenters(bitmap, minX, minY, maxX, maxY);
+                List<MapHelper.Coord> dots = MapHelper.findDotCenters(bitmap, minX, minY, maxX, maxY);
 
                 callback.onDotsReady(dots);
             }
