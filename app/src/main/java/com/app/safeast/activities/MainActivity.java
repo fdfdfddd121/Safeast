@@ -31,6 +31,7 @@ public class MainActivity extends AppCompatActivity {
         init();
     }
 
+    //initialize all the variables
     private void init()
     {
         FM = getSupportFragmentManager();
@@ -59,6 +60,7 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    //creates a fragment view
     private void createFragment(Fragment fragment){
         getSupportFragmentManager()
                 .beginTransaction()
@@ -66,12 +68,16 @@ public class MainActivity extends AppCompatActivity {
                 .hide(fragment)
                 .commit();
     }
+
+    //shows fragment view
     private void showFragment(Fragment fragment){
         getSupportFragmentManager()
                 .beginTransaction()
                 .show(fragment)
                 .commit();
     }
+
+    //hides fragment view
     private void hideFragment(Fragment fragment){
         getSupportFragmentManager()
                 .beginTransaction()

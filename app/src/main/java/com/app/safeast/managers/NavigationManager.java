@@ -29,7 +29,6 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.VisibleRegion;
 import com.google.android.gms.location.FusedLocationProviderClient;
-import com.google.maps.routing.v2.*;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -59,15 +58,15 @@ public class NavigationManager {
     private Context context;
     private GoogleMap googleMap;
     private OkHttpClient client;
-    private RoutesClient routingClient;
     private HashMap<Integer, Shelter> shelterMap;
     private UserMarker user;
     private FusedLocationProviderClient fusedLocationClient;
 
+    //make the filter wait for alert time to calculate
     private volatile boolean alertTimeFetched = false;
     private final Object alertTimeLock = new Object();
 
-
+    // Constructor for NavigationManager
     public NavigationManager(Context context, GoogleMap googleMap) {
         this.context = context;
         this.googleMap = googleMap;
@@ -77,6 +76,7 @@ public class NavigationManager {
         this.fusedLocationClient = LocationServices.getFusedLocationProviderClient(context);
     }
 
+    //gets the directions between the user and the shelter selected
     public void giveDirections(Marker destMarker) {
         if (destMarker == null || googleMap == null || user == null) {
             Log.e("NavigationManager", "Cannot give directions: missing data");
@@ -120,14 +120,12 @@ public class NavigationManager {
                         return;
                     }
 
-                    // 4. Extract the Polyline String
                     JSONArray routes = json.getJSONArray("routes");
                     if (routes.length() > 0) {
                         JSONObject route = routes.getJSONObject(0);
                         JSONObject overviewPolyline = route.getJSONObject("overview_polyline");
                         String encodedString = overviewPolyline.getString("points");
 
-                        // 5. Decode and Draw on Main Thread
                         List<LatLng> points = MapHelper.decodePoly(encodedString);
 
                         if (context instanceof Activity) {
@@ -145,16 +143,13 @@ public class NavigationManager {
     }
 
 
+    //gets the shelters near the user's location
     public void sheltersNearGPS(ActivityResultLauncher<String> locationPermissionRequest, MapView mapView, Activity activity) {
-        // First, check if we have permission to access location
         clearMarkers();
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            // You have permission. Get the location.
             fusedLocationClient.getLastLocation().addOnSuccessListener(activity, location -> {
                 if (location != null) {
-                    // Location found. Create a LatLng object.
                     LatLng currentLatLng = new LatLng(location.getLatitude(), location.getLongitude());
-                    // Clear previous markers, add a new one, and move the camera
                     if (user == null) {
                         user = new UserMarker(currentLatLng, googleMap);
                     } else {
@@ -167,12 +162,11 @@ public class NavigationManager {
                 }
             });
         } else {
-            // You do not have permission. Request it from the user.
             locationPermissionRequest.launch(Manifest.permission.ACCESS_FINE_LOCATION);
         }
     }
 
-
+    //gets shelters near searched location
     public void sheltersNearSearch(SearchView searchView, MapView mapView, Activity activity) {
         String locationName = searchView.getQuery().toString();
         if (locationName.isEmpty()) {
@@ -180,17 +174,13 @@ public class NavigationManager {
             return;
         }
         clearMarkers();
-        // Geocoder can be slow and should ideally be run in a background thread,
-        // but for simplicity, we'll do it on the main thread here.
         Geocoder geocoder = new Geocoder(context, Locale.getDefault());
         try {
-            // getFromLocationName() returns a list of possible addresses. We take the first one.
             List<Address> addressList = geocoder.getFromLocationName(locationName, 1);
             if (addressList != null && !addressList.isEmpty()) {
                 Address address = addressList.get(0);
                 LatLng searchedLatLng = new LatLng(address.getLatitude(), address.getLongitude());
 
-                // Clear previous markers, add a new one, and move the camera
                 if (user == null) {
                     user = new UserMarker(searchedLatLng, googleMap);
                 } else {
@@ -199,7 +189,6 @@ public class NavigationManager {
                 googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(searchedLatLng, 16f));
                 getShelters(mapView, activity);
             } else {
-                // No address found
                 Toast.makeText(context, "Location not found. Try being more specific.", Toast.LENGTH_LONG).show();
             }
         } catch (IOException e) {
@@ -208,6 +197,7 @@ public class NavigationManager {
         }
     }
 
+    //clears the markers from the map
     private void clearMarkers() {
         if (!shelterMap.isEmpty()) {
             for (Shelter shelter : shelterMap.values()) {
@@ -219,7 +209,7 @@ public class NavigationManager {
         Shelter.resetCount();
     }
 
-
+    //actually gets the shelter coordinates from the api
     private void getShelters(MapView mapView, Activity activity) {
         LatLng center = user.getLocation();
         MapHelper.Coord centerWPS = MapHelper.convertEPSG(center.longitude, center.latitude, MapHelper.EPSG.GPS.getLabel(), MapHelper.EPSG.WPS.getLabel());
@@ -228,7 +218,7 @@ public class NavigationManager {
 
         int width = mapView.getWidth();
         int height = mapView.getHeight();
-
+        //get map corners
         VisibleRegion vRegion = googleMap.getProjection().getVisibleRegion();
         LatLng ne = vRegion.farRight;
         LatLng sw = vRegion.nearLeft;
@@ -260,14 +250,15 @@ public class NavigationManager {
             }
         });
 
-        fetchWmsImage(bbox, mapView, new DotResultCallback() {
+        fetchWmsImage(bbox, mapView, new IconResultCallback() {
             @Override
             public void onDotsReady(List<MapHelper.Coord> dots) {
                 if (activity == null) return;
+                //if we have dots show them and try filtering
                 activity.runOnUiThread(() -> {
                     for (MapHelper.Coord dot : dots) {
-                        LatLng dotLatLng = new LatLng(dot.mapY, dot.mapX);
-                        Shelter shelter = new Shelter(dotLatLng, googleMap);
+                        LatLng iconLatLng = new LatLng(dot.mapY, dot.mapX);
+                        Shelter shelter = new Shelter(iconLatLng, googleMap);
                         shelterMap.put(shelter.getId(), shelter);
                     }
                     Log.d("NavigationManager", "Added " + shelterMap.size() + " shelters. Filtering...");
@@ -278,7 +269,6 @@ public class NavigationManager {
                                 ShelterResult nearest = reachableShelters.get(0);
                                 Set<Integer> reachableIds = reachableShelters.stream().map(s -> s.shelter.getId()).collect(Collectors.toSet());
 
-                                // Color all reachable shelters blue
                                 for (ShelterResult result : reachableShelters) {
                                     result.shelter.getMarker().setIcon(
                                             BitmapDescriptorFactory.defaultMarker(
@@ -295,7 +285,6 @@ public class NavigationManager {
                                     }
                                 }
 
-                                // Color nearest green and show info
                                 nearest.shelter.getMarker().setIcon(
                                         BitmapDescriptorFactory.defaultMarker(
                                                 BitmapDescriptorFactory.HUE_GREEN));
@@ -330,29 +319,33 @@ public class NavigationManager {
         });
     }
 
-
-public interface DotResultCallback {
+    //callback interface for getting the shelter coordinates
+    public interface IconResultCallback {
     void onDotsReady(List<MapHelper.Coord> dots);
 
     void onError(Exception e);
 }
 
+    //callback interface for filtering the shelters
     public interface ShelterFilterCallback {
         void onSheltersFiltered(List<ShelterResult> reachableShelters);
         void onError(Exception e);
     }
 
-    // Make ShelterResult public so callback can use it
+    //good shelters from the filter
     public static class ShelterResult implements Comparable<ShelterResult> {
         public Shelter shelter;
         public int travelTime;
         public double distance;
 
+        // Constructor for ShelterResult
         public ShelterResult(Shelter shelter, int travelTime, double distance) {
             this.shelter = shelter;
             this.travelTime = travelTime;
             this.distance = distance;
         }
+
+        //getters for the shelter result
 
         public Shelter getShelter() {
             return shelter;
@@ -381,15 +374,16 @@ public interface DotResultCallback {
         }
 
         @Override
+        //sort the shelters by travel time
         public int compareTo(ShelterResult shelterResult) {
             return Integer.compare(this.travelTime, shelterResult.travelTime);
         }
     }
 
-
+    //filters the shelters by user alert time
     public void filterShelters(Activity activity, ShelterFilterCallback callback) {
         new Thread(() -> {
-            // Wait for alert time to complete
+            // wait for alert time to complete
             synchronized (alertTimeLock) {
                 long startTime = System.currentTimeMillis();
                 while (!alertTimeFetched && (System.currentTimeMillis() - startTime) < 10000) {
@@ -444,7 +438,7 @@ public interface DotResultCallback {
                         try {
                             ShelterResult result = calculateRoute(user.getLocation(), shelter);
 
-                            if (result != null && result.getTravelTime() <= user.getReactionTimeSec()*2) {
+                            if (result != null && result.getTravelTime() <= user.getReactionTimeSec()*2) { //add shelter if reachable
                                 results.add(result);
                                 Log.d("ShelterFinder", "Reachable: " +
                                         shelter.getName() + " - " + result.getFormattedTime());
@@ -460,7 +454,7 @@ public interface DotResultCallback {
                 thread.start();
             }
 
-            // Wait for all threads to complete
+            // wait for all threads to complete
             for (Thread thread : threads) {
                 try {
                     thread.join(10000); // 10 second timeout per thread
@@ -469,7 +463,7 @@ public interface DotResultCallback {
                 }
             }
 
-            // Sort results by travel time
+            //sort results by travel time
             Collections.sort(results);
 
             Log.d("ShelterFinder", "Found " + results.size() + "/" +
@@ -481,15 +475,11 @@ public interface DotResultCallback {
     }
 
 
-
-    /**
-     * Calculate route using Google Directions API
-     */
+    //calculates the route between the user and the shelter using the directions api
     private ShelterResult calculateRoute(LatLng origin, Shelter shelter) {
         try {
             LatLng destination = shelter.getLocation();
 
-            // Build API URL
             String urlString = "https://maps.googleapis.com/maps/api/directions/json?" +
                     "origin=" + origin.latitude + "," + origin.longitude +
                     "&destination=" + destination.latitude + "," + destination.longitude +
@@ -500,7 +490,6 @@ public interface DotResultCallback {
                     .url(urlString)
                     .build();
 
-            // Synchronous call (we're already in a background thread)
             try (Response response = client.newCall(request).execute()) {
                 if (!response.isSuccessful()) {
                     Log.w("ShelterFinder", "API returned HTTP " + response.code());
@@ -526,7 +515,7 @@ public interface DotResultCallback {
                 JSONArray legs = route.getJSONArray("legs");
                 JSONObject leg = legs.getJSONObject(0);
 
-                // Extract duration and distance
+                //extract duration and distance
                 int travelTime = leg.getJSONObject("duration").getInt("value");
                 double distance = leg.getJSONObject("distance").getDouble("value");
 
@@ -539,18 +528,21 @@ public interface DotResultCallback {
         }
     }
 
+    //callback interface for getting the alert time
     public interface AlertTimeCallback {
         void onTimeFetched(int seconds);
         void onError(String message);
     }
 
-
+    //gets the alert time from the api
     private void fetchAlertTime(double centerX, double centerY, Activity activity, AlertTimeCallback callback) {
-        alertTimeFetched = false; // Reset flag
+        alertTimeFetched = false; //reset flag
+
         String url = "https://www.govmap.gov.il/api/layers-catalog/entitiesByPoint";
         String jsonBody = "{" + "\"point\":[" + centerX + "," + centerY + "]," + "\"layers\":[{\"layerId\":\"427\"},{\"layerId\":\"417\"}]," + "\"tolerance\":277.8130556261113" + "}";
         RequestBody body = RequestBody.create(jsonBody, MediaType.parse("application/json"));
         Request request = new Request.Builder().url(url).post(body).addHeader("accept", "application/json, text/plain, */*").addHeader("content-type", "application/json").addHeader("accept-language", "he,he-IL;q=0.9,en-US;q=0.8,en;q=0.7").addHeader("referer", "https://www.govmap.gov.il/?z=6&c=180726.75,573949.65&lay=427,417&b=7&bs=427,417%7C179775.17,577426.46").build();
+
         client.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
@@ -597,6 +589,7 @@ public interface DotResultCallback {
         });
     }
 
+    //formats the json response into seconds
     private int formatTime(String json) throws JSONException {
         JSONObject object = new JSONObject(json);
         JSONArray dataArray = object.getJSONArray("data");
@@ -631,7 +624,7 @@ public interface DotResultCallback {
                             try {
                                 return Integer.parseInt(Objects.requireNonNull(matcher.group(1)));
                             } catch (NumberFormatException e) {
-                                // Failed to parse, return 0
+                                return -1;
                             }
                         }
                     }
@@ -641,6 +634,7 @@ public interface DotResultCallback {
         return 0;
     }
 
+    //gets the bounding box of the map
     private double[] computeBbox(double centerX, double centerY, int width, int height, double metersPerPixelX, double metersPerPixelY) {
         double halfWidth = width * metersPerPixelX / 2.0;
         double halfHeight = height * metersPerPixelY / 2.0;
@@ -648,7 +642,8 @@ public interface DotResultCallback {
     }
 
 
-    private void fetchWmsImage(double[] bbox, MapView mapView, DotResultCallback callback) {
+    //fetches the shelter icon image from the api
+    private void fetchWmsImage(double[] bbox, MapView mapView, IconResultCallback callback) {
         double minX = bbox[0], minY = bbox[1], maxX = bbox[2], maxY = bbox[3];
 
         String url = "https://www.govmap.gov.il/api/geoserver/ows/public/?" + "SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true" + "&LAYERS=govmap:layer_bombshelters&TILED=false&CRS=EPSG:3857" + "&STYLES=govmap:layer_bombshelters&FEATUREVERSION=1" + "&WIDTH=" + mapView.getWidth() + "&HEIGHT=" + mapView.getHeight() + "&BBOX=" + minX + "," + minY + "," + maxX + "," + maxY;
@@ -668,7 +663,7 @@ public interface DotResultCallback {
                     return;
                 }
 
-                Bitmap bitmap = BitmapFactory.decodeStream(response.body().byteStream());
+                Bitmap bitmap = BitmapFactory.decodeStream(response.body().byteStream()); //convert into bitmap
                 if (bitmap == null) {
                     callback.onError(new IOException("Decode error"));
                     return;

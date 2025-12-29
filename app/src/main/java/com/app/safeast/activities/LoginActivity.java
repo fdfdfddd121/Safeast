@@ -25,6 +25,7 @@ import com.google.firebase.auth.FirebaseAuth;
 import java.util.HashMap;
 import java.util.Map;
 
+//the activity for logging in and registering to an account
 public class LoginActivity extends AppCompatActivity {
 
     Button loginButton;
@@ -49,7 +50,7 @@ public class LoginActivity extends AppCompatActivity {
         });
         init();
     }
-
+    //initialize all the variables
     void init()
     {
         loginButton = findViewById(R.id.loginORSignBTN);
@@ -66,7 +67,7 @@ public class LoginActivity extends AppCompatActivity {
         reference = FirebaseDatabase.getInstance().getReference();
     }
 
-
+    //button function to login the user
     public void LoginUser(View view) {
         String email = emailEditText.getText().toString();
         String password = passwordEditText.getText().toString();
@@ -99,6 +100,7 @@ public class LoginActivity extends AppCompatActivity {
         });
     }
 
+    //button function to register the user
     public void registerUser(View view) {
         String email = emailEditText.getText().toString();
         String password = passwordEditText.getText().toString();
@@ -134,6 +136,7 @@ public class LoginActivity extends AppCompatActivity {
         });
     }
 
+    //switch between register and login
     public void switchMode(View view) {
         if(username.getVisibility() == View.GONE)
         {
@@ -163,6 +166,7 @@ public class LoginActivity extends AppCompatActivity {
         }
     }
 
+    //switch if the user wants to save the login
     public void saveLogin(View view) {
         if(rememberMe.isChecked())
         {

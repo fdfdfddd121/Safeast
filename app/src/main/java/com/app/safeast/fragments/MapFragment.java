@@ -47,10 +47,6 @@ public class MapFragment extends Fragment implements OnMapReadyCallback, GoogleM
     private ActivityResultLauncher<String> locationPermissionRequest;
     private Marker selectedMarker = null;
 
-    // TODO: Rename parameter arguments, choose names that match
-    // the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
-
-    // TODO: Rename and change types of parameters
     public MapFragment() {
         // Required empty public constructor
     }
@@ -61,7 +57,6 @@ public class MapFragment extends Fragment implements OnMapReadyCallback, GoogleM
      *
      * @return A new instance of fragment MapFragment.
      */
-    // TODO: Rename and change types and number of parameters
     public static MapFragment newInstance() {
         return new MapFragment();
     }
@@ -92,6 +87,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback, GoogleM
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        //must initialize variables in view
         mapView = view.findViewById(R.id.mapView);
         currLoc = view.findViewById(R.id.currLoc);
         getDir = view.findViewById(R.id.getDir);
@@ -125,13 +121,12 @@ public class MapFragment extends Fragment implements OnMapReadyCallback, GoogleM
 
         });
 
-        // --- ADD THE ONCLICK LISTENERS FOR YOUR BUTTONS ---
-
-        // 1. For the "Current Location" button
+        //current location function link
         currLoc.setOnClickListener(v -> {
                 navManager.sheltersNearGPS(locationPermissionRequest, mapView, getActivity());
         });
 
+        //get directions function link
         getDir.setOnClickListener(view1 -> {
             navManager.giveDirections(selectedMarker);
         });
@@ -144,9 +139,9 @@ public class MapFragment extends Fragment implements OnMapReadyCallback, GoogleM
     public void onMapReady(@NonNull GoogleMap map) {
         googleMap = map;
 
-        // You can customize the map here
         googleMap.getUiSettings().setZoomControlsEnabled(true); // Show zoom buttons
         googleMap.getUiSettings().setAllGesturesEnabled(true);
+
 
         googleMap.setOnMarkerClickListener(this);
         googleMap.setOnMapClickListener(new GoogleMap.OnMapClickListener() {
@@ -158,14 +153,27 @@ public class MapFragment extends Fragment implements OnMapReadyCallback, GoogleM
             }
         });
 
-        // Let's place a default marker on Beer Sheva and move the camera
+        // set default location in Beer Sheva
         LatLng beerSheva = new LatLng(31.2530, 34.7915);
         googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(beerSheva, 12));
+
+        //initialize navigationManager
         navManager = new NavigationManager(requireActivity(), googleMap);
 
     }
 
 
+    @Override
+    public boolean onMarkerClick(@NonNull Marker marker) {
+        if (Objects.equals(marker.getTitle(), "USER"))
+        {
+            return false;
+        }
+        selectedMarker = marker;
+        currLoc.setVisibility(View.GONE);
+        getDir.setVisibility(View.VISIBLE);
+        return false;
+    }
 
     // --- ADD ALL OF THE FOLLOWING METHODS FOR MAP LIFECYCLE MANAGEMENT ---
 
@@ -225,16 +233,4 @@ public class MapFragment extends Fragment implements OnMapReadyCallback, GoogleM
         }
     }
 
-
-    @Override
-    public boolean onMarkerClick(@NonNull Marker marker) {
-        if (Objects.equals(marker.getTitle(), "USER"))
-        {
-            return false;
-        }
-        selectedMarker = marker;
-        currLoc.setVisibility(View.GONE);
-        getDir.setVisibility(View.VISIBLE);
-        return false;
-    }
 }

@@ -21,6 +21,7 @@ import java.util.Map;
 
 public class MapHelper {
 
+    //EPSG types for app and logs
     public enum EPSG {ISRAEL("EPSG:2039"), WPS("EPSG:3857"), GPS("EPSG:4326");
    private final String label;
    EPSG(String label)
@@ -33,6 +34,7 @@ public class MapHelper {
    }
    }
 
+   //Coord is static since its mostly in conversions
     public static class Coord {
         public double mapX, mapY;
         public String epsgType;
@@ -45,13 +47,13 @@ public class MapHelper {
 
     }
 
-    // Add these as class-level static fields
+    //for faster transforms save the conversion
     private static final CRSFactory crsFactory = new CRSFactory();
     private static final CoordinateTransformFactory ctFactory = new CoordinateTransformFactory();
     private static final Map<String, CoordinateReferenceSystem> crsCache = new HashMap<>();
     private static final Map<String, CoordinateTransform> transformCache = new HashMap<>();
 
-    // Optimized conversion method
+    // coordinate conversion method for Coord objects
     public static Coord convertEPSG(Coord coordinates, String toEPSG) {
         String transformKey = coordinates.epsgType + "->" + toEPSG;
 
@@ -72,6 +74,7 @@ public class MapHelper {
         return new Coord(dstCoord.x, dstCoord.y, toEPSG);
     }
 
+    //returns  any cached CRS or creates a new one
     private static CoordinateReferenceSystem getCachedCRS(String epsgType) {
         CoordinateReferenceSystem crs = crsCache.get(epsgType);
         if (crs == null) {
@@ -81,7 +84,7 @@ public class MapHelper {
         return crs;
     }
 
-
+    //conversion method for number coordinates
     public static Coord convertEPSG(double X, double Y, String fromEPSG, String toEPSG) {
         String transformKey = fromEPSG + "->" + toEPSG;
 
@@ -102,41 +105,43 @@ public class MapHelper {
         return new Coord(dstCoord.x, dstCoord.y, toEPSG);
     }
 
-    /**
-     * Detects red/white pixel clusters and returns one coordinate per cluster.
-     */
+
+    //shelter dot detection method, returns list of their coordinates
+    //gets a bitmap and the bounds of the bounding box
     public static List<Coord> findDotCenters(Bitmap bitmap, double minX, double minY, double maxX, double maxY) {
         int width = bitmap.getWidth();
         int height = bitmap.getHeight();
 
-        // Pre-extract all pixels at once - MUCH faster than repeated getPixel() calls
+        //flatten the bitmap to an array
         int[] pixels = new int[width * height];
         bitmap.getPixels(pixels, 0, width, 0, 0, width, height);
 
-        boolean[] visited = new boolean[width * height]; // 1D array is faster
+        boolean[] visited = new boolean[width * height]; //visited array to stop revisits
         List<Coord> foundDots = new ArrayList<>();
 
-        double dx = (maxX - minX) / width;
-        double dy = (maxY - minY) / height;
+        //calculate bbox to bitmap ratio
+        double pixelRatioX = (maxX - minX) / width;
+        double pixelRatioY = (maxY - minY) / height;
 
         // Sample every N pixels instead of every single pixel (adjust stepSize for speed/accuracy balance)
-        int stepSize = 3; // Start checking every 3rd pixel - dots are large enough
+        int stepSize = 3; // Start checking every 3rd pixel - shelter icons are about this size
 
+        //go through pixels
         for (int y = 0; y < height; y += stepSize) {
             for (int x = 0; x < width; x += stepSize) {
                 int index = y * width + x;
 
-                if (visited[index])
+                if (visited[index]) //skip if already visited
                     continue;
 
                 int pixel = pixels[index];
 
-                // Optimized color check using bit operations
-                if (!isDotPixel(pixel))
+                if (!isFromIcon(pixel)) //skip if not part of the icon
                     continue;
 
-                // Flood-fill cluster
-                int[] queueX = new int[5000]; // Pre-allocated arrays instead of ArrayDeque
+                // Flood-fill cluster - like bucket fill but to search for the icon
+                //"queues" for the coordinates
+                int[] queueX = new int[5000];
                 int[] queueY = new int[5000];
                 int qHead = 0, qTail = 0;
 
@@ -144,45 +149,47 @@ public class MapHelper {
                 queueY[qTail] = y;
                 qTail++;
 
-                int sumX = 0, sumY = 0, count = 0;
+                int sumX = 0, sumY = 0, count = 0; //variables to calculate average(center pixel)
 
-                while (qHead < qTail) {
-                    int px = queueX[qHead];
-                    int py = queueY[qHead];
+                while (qHead < qTail) { //go through till queue is empty
+                    int pixelX = queueX[qHead];
+                    int pixelY = queueY[qHead];
                     qHead++;
 
-                    if (px < 0 || px >= width || py < 0 || py >= height)
+                    if (pixelX < 0 || pixelX >= width || pixelY < 0 || pixelY >= height) //if out of bounds
                         continue;
 
-                    int idx = py * width + px;
-                    if (visited[idx])
+                    int idx = pixelY * width + pixelX;
+                    if (visited[idx]) //if already visited
                         continue;
 
-                    if (!isDotPixel(pixels[idx]))
+                    if (!isFromIcon(pixels[idx])) //if not part of the icon
                         continue;
 
                     visited[idx] = true;
-                    sumX += px;
-                    sumY += py;
+                    sumX += pixelX;
+                    sumY += pixelY;
                     count++;
 
-                    // Add 4-connected neighbors only (not 8) for speed
-                    if (qTail + 4 < queueX.length) {
-                        queueX[qTail] = px + 1; queueY[qTail++] = py;
-                        queueX[qTail] = px - 1; queueY[qTail++] = py;
-                        queueX[qTail] = px; queueY[qTail++] = py + 1;
-                        queueX[qTail] = px; queueY[qTail++] = py - 1;
+                    // Add adjacent neighbors
+                    if (qTail + 4 < queueX.length) { //fail safe to avoid overflow
+                        queueX[qTail] = pixelX + 1; queueY[qTail++] = pixelY;
+                        queueX[qTail] = pixelX - 1; queueY[qTail++] = pixelY;
+                        queueX[qTail] = pixelX; queueY[qTail++] = pixelY + 1;
+                        queueX[qTail] = pixelX; queueY[qTail++] = pixelY - 1;
                     }
                 }
 
-                if (count > 20) {
-                    double cx = (double) sumX / count;
-                    double cy = (double) sumY / count;
+                if (count > 20) { //if there are enough pixels for it to be an icon
+                    double centerX = (double) sumX / count;
+                    double centerY = (double) sumY / count;
 
-                    double mapX = minX + cx * dx;
-                    double mapY = maxY - cy * dy;
+                    //calculate the map coordinates from bbox
+                    double mapX = minX + centerX * pixelRatioX;
+                    double mapY = maxY - centerY * pixelRatioY;
 
                     foundDots.add(convertEPSG(mapX,mapY,EPSG.WPS.label, EPSG.GPS.label));
+                    //create a conversion to website coordinates
                     Coord cord = convertEPSG(mapX, mapY, EPSG.WPS.label, EPSG.ISRAEL.label);
                     Log.d("DotDetector", "Dot as ISRAEL → (" + cord.mapX + ", " + cord.mapY + ")");
                 }
@@ -192,19 +199,22 @@ public class MapHelper {
         return foundDots;
     }
 
-    // Optimized color checking using bit shifts
-    private static boolean isDotPixel(int pixel) {
+    //check if a pixel is part of the shelter icon
+    private static boolean isFromIcon(int pixel) {
+        //convert int of pixel into its components
         int r = (pixel >> 16) & 0xFF;
         int g = (pixel >> 8) & 0xFF;
         int b = pixel & 0xFF;
 
-        return (r > 180 && g < 150 && b < 150) ||  // red
+        return (r > 180 && g < 150 && b < 150) ||  // dark red
                 (r > 220 && g > 220 && b > 220);    // white
     }
 
 
+    //-- for creating the route on the map --//
     private static com.google.android.gms.maps.model.Polyline currentPolyline;
 
+    //draw the route on the map from coordinates
     public static void drawRouteOnMap(List<LatLng> points, LatLng origin, LatLng dest, GoogleMap googleMap) {
         // Remove old line if exists
         if (currentPolyline != null) {
@@ -237,31 +247,34 @@ public class MapHelper {
         }
     }
 
+    //decodes directionsAPI route into a list of LatLngs
     public static List<LatLng> decodePoly(String encoded) {
         List<LatLng> poly = new ArrayList<>();
         int index = 0, len = encoded.length();
         int lat = 0, lng = 0;
 
-        while (index < len) {
-            int b, shift = 0, result = 0;
-            do {
-                b = encoded.charAt(index++) - 63;
-                result |= (b & 0x1f) << shift;
+        while (index < len) { //go through the string
+            int ch, shift = 0, result = 0;
+            do { //extract the latitude and convert it from the chars
+                ch = encoded.charAt(index++) - 63;
+                result |= (ch & 0x1f) << shift;
                 shift += 5;
-            } while (b >= 0x20);
-            int dlat = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
-            lat += dlat;
+            } while (ch >= 0x20);
+            //zigzag decoding if it's a negative coordinate
+            int deltalat = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
+            lat += deltalat;
 
             shift = 0;
             result = 0;
-            do {
-                b = encoded.charAt(index++) - 63;
-                result |= (b & 0x1f) << shift;
+            do { //extract the longitude
+                ch = encoded.charAt(index++) - 63;
+                result |= (ch & 0x1f) << shift;
                 shift += 5;
-            } while (b >= 0x20);
-            int dlng = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
-            lng += dlng;
+            } while (ch >= 0x20);
+            int deltalng = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
+            lng += deltalng;
 
+            //turn back into float coordinates
             LatLng p = new LatLng((((double) lat / 1E5)),
                     (((double) lng / 1E5)));
             poly.add(p);

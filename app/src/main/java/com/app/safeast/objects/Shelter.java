@@ -6,13 +6,15 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 
-public class Shelter /*implements AutoCloseable*/ {
+//Shelter object
+public class Shelter {
     private static int counter = 0;
     private int id;
     private String name;
     private LatLng location;
     private Marker marker;
 
+    // Constructor for Shelter
     public Shelter(LatLng location, GoogleMap googleMap)
     {
         this.id = counter++;
@@ -21,6 +23,7 @@ public class Shelter /*implements AutoCloseable*/ {
         this.marker = googleMap.addMarker(new MarkerOptions().position(location).title(name).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)));
     }
 
+    //getters for the shelter
     public Marker getMarker()
     {
         return marker;
@@ -41,21 +44,17 @@ public class Shelter /*implements AutoCloseable*/ {
         return id;
     }
 
+    //remove the shelter from the map
     public void remove() {
         if (marker != null) {
             marker.remove();
         }
     }
 
+    //reset the counter
     public static void resetCount()
     {
         counter = 0;
     }
-
-
-/*    public void close()
-    {
-        marker.remove();
-    }*/
 
 }
