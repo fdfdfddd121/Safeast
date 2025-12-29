@@ -55,12 +55,12 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 
 public class NavigationManager {
-    private Context context;
-    private GoogleMap googleMap;
-    private OkHttpClient client;
-    private HashMap<Integer, Shelter> shelterMap;
+    private final Context context;
+    private final GoogleMap googleMap;
+    private final OkHttpClient client;
+    private final HashMap<Integer, Shelter> shelterMap;
     private UserMarker user;
-    private FusedLocationProviderClient fusedLocationClient;
+    private final FusedLocationProviderClient fusedLocationClient;
 
     //make the filter wait for alert time to calculate
     private volatile boolean alertTimeFetched = false;
@@ -129,9 +129,7 @@ public class NavigationManager {
                         List<LatLng> points = MapHelper.decodePoly(encodedString);
 
                         if (context instanceof Activity) {
-                            ((Activity) context).runOnUiThread(() -> {
-                               MapHelper.drawRouteOnMap(points, origin, destination,googleMap);
-                            });
+                            ((Activity) context).runOnUiThread(() -> MapHelper.drawRouteOnMap(points, origin, destination,googleMap));
                         }
                     }
 
@@ -334,9 +332,9 @@ public class NavigationManager {
 
     //good shelters from the filter
     public static class ShelterResult implements Comparable<ShelterResult> {
-        public Shelter shelter;
-        public int travelTime;
-        public double distance;
+        public final Shelter shelter;
+        public final int travelTime;
+        public final double distance;
 
         // Constructor for ShelterResult
         public ShelterResult(Shelter shelter, int travelTime, double distance) {
@@ -347,16 +345,8 @@ public class NavigationManager {
 
         //getters for the shelter result
 
-        public Shelter getShelter() {
-            return shelter;
-        }
-
         public int getTravelTime() {
             return travelTime;
-        }
-
-        public double getDistance() {
-            return distance;
         }
 
         public String getFormattedTime() {

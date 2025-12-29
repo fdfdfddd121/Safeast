@@ -17,12 +17,14 @@ public class UserMarker {
         this.marker = googleMap.addMarker(new MarkerOptions().position(location).title("USER"));
     }
 
-    // Constructor for UserMarker with reaction time
-    public UserMarker(LatLng location, int reactionTimeSec, GoogleMap googleMap) {
-        this.location = location;
-        this.reactionTimeSec = reactionTimeSec;
-        this.marker = googleMap.addMarker(new MarkerOptions().position(location).title("USER"));
-    }
+// --Commented out by Inspection START (29/12/2025 17:38):
+//    // Constructor for UserMarker with reaction time
+//    public UserMarker(LatLng location, int reactionTimeSec, GoogleMap googleMap) {
+//        this.location = location;
+//        this.reactionTimeSec = reactionTimeSec;
+//        this.marker = googleMap.addMarker(new MarkerOptions().position(location).title("USER"));
+//    }
+// --Commented out by Inspection STOP (29/12/2025 17:38)
 
     //getters for the user marker
 

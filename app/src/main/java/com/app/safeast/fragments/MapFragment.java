@@ -27,8 +27,6 @@ import com.google.android.gms.maps.model.Marker;
 import java.util.HashMap;
 import java.util.Objects;
 
-import okhttp3.OkHttpClient;
-
 
 /**
  * A simple {@link Fragment} subclass.
@@ -97,13 +95,10 @@ public class MapFragment extends Fragment implements OnMapReadyCallback, GoogleM
             mapView.onCreate(savedInstanceState);
             mapView.getMapAsync(this); // Register the callback
         }
-        searchView.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                searchView.setQuery("", false);
-                searchView.onActionViewExpanded();
-                searchView.setIconified(false);
-            }
+        searchView.setOnClickListener(v -> {
+            searchView.setQuery("", false);
+            searchView.onActionViewExpanded();
+            searchView.setIconified(false);
         });
 
         searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
@@ -122,14 +117,10 @@ public class MapFragment extends Fragment implements OnMapReadyCallback, GoogleM
         });
 
         //current location function link
-        currLoc.setOnClickListener(v -> {
-                navManager.sheltersNearGPS(locationPermissionRequest, mapView, getActivity());
-        });
+        currLoc.setOnClickListener(v -> navManager.sheltersNearGPS(locationPermissionRequest, mapView, getActivity()));
 
         //get directions function link
-        getDir.setOnClickListener(view1 -> {
-            navManager.giveDirections(selectedMarker);
-        });
+        getDir.setOnClickListener(view1 -> navManager.giveDirections(selectedMarker));
     }
 
     /**
@@ -144,13 +135,10 @@ public class MapFragment extends Fragment implements OnMapReadyCallback, GoogleM
 
 
         googleMap.setOnMarkerClickListener(this);
-        googleMap.setOnMapClickListener(new GoogleMap.OnMapClickListener() {
-            @Override
-            public void onMapClick(@NonNull LatLng latLng) {
-                selectedMarker = null;
-                currLoc.setVisibility(View.VISIBLE);
-                getDir.setVisibility(View.GONE);
-            }
+        googleMap.setOnMapClickListener(latLng -> {
+            selectedMarker = null;
+            currLoc.setVisibility(View.VISIBLE);
+            getDir.setVisibility(View.GONE);
         });
 
         // set default location in Beer Sheva

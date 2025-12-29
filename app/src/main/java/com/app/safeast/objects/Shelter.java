@@ -9,10 +9,10 @@ import com.google.android.gms.maps.model.MarkerOptions;
 //Shelter object
 public class Shelter {
     private static int counter = 0;
-    private int id;
-    private String name;
-    private LatLng location;
-    private Marker marker;
+    private final int id;
+    private final String name;
+    private final LatLng location;
+    private final Marker marker;
 
     // Constructor for Shelter
     public Shelter(LatLng location, GoogleMap googleMap)

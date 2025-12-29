@@ -36,8 +36,9 @@ public class MapHelper {
 
    //Coord is static since its mostly in conversions
     public static class Coord {
-        public double mapX, mapY;
-        public String epsgType;
+        public final double mapX;
+       public final double mapY;
+        public final String epsgType;
 
         public Coord(double x, double y, String epsg) {
             mapX=x;
@@ -52,27 +53,6 @@ public class MapHelper {
     private static final CoordinateTransformFactory ctFactory = new CoordinateTransformFactory();
     private static final Map<String, CoordinateReferenceSystem> crsCache = new HashMap<>();
     private static final Map<String, CoordinateTransform> transformCache = new HashMap<>();
-
-    // coordinate conversion method for Coord objects
-    public static Coord convertEPSG(Coord coordinates, String toEPSG) {
-        String transformKey = coordinates.epsgType + "->" + toEPSG;
-
-        // Get or create cached transform
-        CoordinateTransform transform = transformCache.get(transformKey);
-        if (transform == null) {
-            CoordinateReferenceSystem src = getCachedCRS(coordinates.epsgType);
-            CoordinateReferenceSystem dst = getCachedCRS(toEPSG);
-            transform = ctFactory.createTransform(src, dst);
-            transformCache.put(transformKey, transform);
-        }
-
-        // Reuse ProjCoordinate objects if possible
-        ProjCoordinate srcCoord = new ProjCoordinate(coordinates.mapX, coordinates.mapY);
-        ProjCoordinate dstCoord = new ProjCoordinate();
-        transform.transform(srcCoord, dstCoord);
-
-        return new Coord(dstCoord.x, dstCoord.y, toEPSG);
-    }
 
     //returns  any cached CRS or creates a new one
     private static CoordinateReferenceSystem getCachedCRS(String epsgType) {
@@ -136,7 +116,7 @@ public class MapHelper {
 
                 int pixel = pixels[index];
 
-                if (!isFromIcon(pixel)) //skip if not part of the icon
+                if (isNotFromIcon(pixel)) //skip if not part of the icon
                     continue;
 
                 // Flood-fill cluster - like bucket fill but to search for the icon
@@ -163,7 +143,7 @@ public class MapHelper {
                     if (visited[idx]) //if already visited
                         continue;
 
-                    if (!isFromIcon(pixels[idx])) //if not part of the icon
+                    if (isNotFromIcon(pixels[idx])) //if not part of the icon
                         continue;
 
                     visited[idx] = true;
@@ -200,14 +180,14 @@ public class MapHelper {
     }
 
     //check if a pixel is part of the shelter icon
-    private static boolean isFromIcon(int pixel) {
+    private static boolean isNotFromIcon(int pixel) {
         //convert int of pixel into its components
         int r = (pixel >> 16) & 0xFF;
         int g = (pixel >> 8) & 0xFF;
         int b = pixel & 0xFF;
 
-        return (r > 180 && g < 150 && b < 150) ||  // dark red
-                (r > 220 && g > 220 && b > 220);    // white
+        return (r <= 180 || g >= 150 || b >= 150) &&  // dark red
+                (r <= 220 || g <= 220 || b <= 220);    // white
     }
 
 

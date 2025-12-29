@@ -64,7 +64,7 @@ dependencies {
     implementation libs.google.maps.services
     implementation libs.slf4j.simple // Required for logging
     implementation libs.gms.play.services.location
-    implementation 'org.locationtech.proj4j:proj4j-epsg:1.4.1'
+    implementation libs.locationtech.proj4j.epsg
     implementation libs.locationtech.proj4j
     implementation libs.locationtech.proj4j.epsg
     implementation libs.okhttp
