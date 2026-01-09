@@ -1,6 +1,8 @@
 package com.app.safeast.activities;
 
+import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
@@ -12,18 +14,24 @@ import com.app.safeast.fragments.ChatFragment;
 import com.app.safeast.fragments.FriendsFragment;
 import com.app.safeast.fragments.MapFragment;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 
 public class MainActivity extends AppCompatActivity {
 
     FragmentManager FM;
     FragmentContainerView fragmentContainerView;
     BottomNavigationView bottomNavigationView;
-    String fragmentName;
     Fragment mapFragment;
     Fragment chatFragment;
     Fragment friendsFragment;
     Fragment selectedFragment;
 
+    SharedPreferences sharedPreferences;
+    FirebaseAuth auth;
+    public static FirebaseUser currentUser;
+
+    //on create
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -34,9 +42,17 @@ public class MainActivity extends AppCompatActivity {
     //initialize all the variables
     private void init()
     {
+        auth = FirebaseAuth.getInstance();
+        sharedPreferences = getSharedPreferences("login", MODE_PRIVATE);
+
+        // The Firebase SDK automatically persists the user's session.
+        // All we need to do is check who the current user is on startup.
+        if(sharedPreferences.getBoolean("login", true))
+        {
+            currentUser = auth.getCurrentUser();
+        }
         FM = getSupportFragmentManager();
         fragmentContainerView = findViewById(R.id.fragmentContainerView);
-        fragmentName = "API";
         bottomNavigationView = findViewById(R.id.bottomNavigationView);
         mapFragment = new MapFragment();
         friendsFragment = new FriendsFragment();

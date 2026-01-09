@@ -1,5 +1,6 @@
 package com.app.safeast.activities;
 
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.view.View;
@@ -10,6 +11,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
+import androidx.activity.result.ActivityResultLauncher;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
@@ -32,6 +34,7 @@ public class LoginActivity extends AppCompatActivity {
     TextView username, modeSwitch;
     CheckBox rememberMe;
     boolean remember = false;
+    ActivityResultLauncher<Intent> launcher;
     SharedPreferences sp;
 
     FirebaseAuth auth;
@@ -76,17 +79,18 @@ public class LoginActivity extends AppCompatActivity {
                 if(remember)
                 {
                     SharedPreferences.Editor editor = sp.edit();
-                    editor.putString("email", email);
-                    editor.putString("password", password);
+                    editor.putBoolean("remember", true);
                     editor.apply();
                 }
                 else{
                     SharedPreferences.Editor editor = sp.edit();
-                    editor.remove("email");
-                    editor.remove("password");
+                    editor.putBoolean("remember", false);
                     editor.apply();
                 }
-                //startActivity(new Intent(MainActivity.this, DataActivity.class));
+                Intent intent = getIntent();
+                intent.putExtra("user",auth.getCurrentUser());
+                setResult(RESULT_OK, intent);
+                finish();
             } else {
                 // Login failed, check if user does not exist
                 String message = Objects.requireNonNull(task.getException()).getMessage();
@@ -104,8 +108,8 @@ public class LoginActivity extends AppCompatActivity {
         String email = emailEditText.getText().toString();
         String password = passwordEditText.getText().toString();
         String username = usernameEditText.getText().toString();
-        if (email.isEmpty() || password.isEmpty()) {
-            Toast.makeText(this, "Fill email + password", Toast.LENGTH_SHORT).show();
+        if (email.isEmpty() || password.isEmpty() || username.isEmpty()) {
+            Toast.makeText(this, "Fill all credentials", Toast.LENGTH_SHORT).show();
             return;
         }
         auth.createUserWithEmailAndPassword(email, password).addOnCompleteListener(task -> {
@@ -118,18 +122,31 @@ public class LoginActivity extends AppCompatActivity {
                 DatabaseReference dbRef = reference.child("Users");
                 dbRef.child(uid).setValue(userMap).addOnCompleteListener(task2 -> {
                     if (task2.isSuccessful()) {
+                        Toast.makeText(this, "Registered!", Toast.LENGTH_SHORT).show();
                         if(remember)
                         {
                             SharedPreferences.Editor editor = sp.edit();
-                            editor.putString("email", email);
-                            editor.putString("password", password);
+                            editor.putBoolean("remember", true);
                             editor.apply();
                         }
-                        Toast.makeText(this, "Registered!", Toast.LENGTH_SHORT).show();
+                        else{
+                            SharedPreferences.Editor editor = sp.edit();
+                            editor.putBoolean("remember", false);
+                            editor.apply();
+                        }
+                        Intent intent = getIntent();
+                        intent.putExtra("user",auth.getCurrentUser());
+                        setResult(RESULT_OK, intent);
+                        finish();
+                    } else {
+                        // This is the important part for handling the database write failure
+                        Toast.makeText(this, "Database write failed: " + Objects.requireNonNull(task2.getException()).getMessage(), Toast.LENGTH_LONG).show();
+                        // Optional: Clean up the created auth user since the DB entry failed
+                        Objects.requireNonNull(auth.getCurrentUser()).delete();
                     }
                 });
             } else {
-                Toast.makeText(this, "Error: " + Objects.requireNonNull(task.getException()).getMessage(), Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Authentication failed: " + Objects.requireNonNull(task.getException()).getMessage(), Toast.LENGTH_SHORT).show();
             }
         });
     }

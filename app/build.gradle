@@ -70,6 +70,8 @@ dependencies {
     implementation libs.okhttp
     implementation libs.cardview
     implementation libs.firebase.database
+    implementation libs.recyclerview
+    implementation libs.generativeai
     def fragment_version = "1.2.5"
     implementation libs.fragment
     implementation libs.appcompat
