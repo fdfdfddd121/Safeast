@@ -70,23 +70,18 @@ public class ChatFragment extends Fragment {
     public void onViewCreated(@NonNull View view, Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // --- Initialize Views ---
         sendBT = view.findViewById(R.id.sendBT);
         messageET = view.findViewById(R.id.messageET);
         recyclerView = view.findViewById(R.id.chatRV);
         loginORSignBTN = view.findViewById(R.id.loginORSignBTN);
         chatLayout = view.findViewById(R.id.chatLayout);
 
-        // --- Setup RecyclerView & Adapter ---
         chatAdapter = new ChatAdapter(messagesList);
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         recyclerView.setAdapter(chatAdapter);
 
-        // --- Initialize ChatManager ---
         chatManager = ChatManager.getInstance();
 
-        // Because the initial message is fetched in the background, we need to wait for it.
-        // This thread will wait for chatManager.response to have a value.
         new Thread(() -> {
             try {
                 int waitTime = 0;
@@ -110,17 +105,16 @@ public class ChatFragment extends Fragment {
                 result -> {
                     if (result.getResultCode() == MainActivity.RESULT_OK && result.getData() != null) {
                         MainActivity.currentUser = result.getData().getParcelableExtra("user");
-                        updateLoginUI();
+                        updateUI();
                     }
                 });
-        updateLoginUI();
+        updateUI();
 
-        // --- Set Click Listeners ---
         loginORSignBTN.setOnClickListener(this::loginORSignBTNClick);
         sendBT.setOnClickListener(this::sendBTClick);
     }
 
-    private void updateLoginUI() {
+    public void updateUI() {
         if (MainActivity.currentUser != null) {
             loginORSignBTN.setVisibility(View.GONE);
             chatLayout.setVisibility(View.VISIBLE);

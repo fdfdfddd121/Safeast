@@ -76,17 +76,9 @@ public class LoginActivity extends AppCompatActivity {
         auth.signInWithEmailAndPassword(email, password).addOnCompleteListener(task -> {
             if (task.isSuccessful()) {
                 // Login success
-                if(remember)
-                {
-                    SharedPreferences.Editor editor = sp.edit();
-                    editor.putBoolean("remember", true);
-                    editor.apply();
-                }
-                else{
-                    SharedPreferences.Editor editor = sp.edit();
-                    editor.putBoolean("remember", false);
-                    editor.apply();
-                }
+                SharedPreferences.Editor editor = sp.edit();
+                editor.putBoolean("remember", remember);
+                editor.apply();
                 Intent intent = getIntent();
                 intent.putExtra("user",auth.getCurrentUser());
                 setResult(RESULT_OK, intent);

@@ -2,7 +2,6 @@ package com.app.safeast.activities;
 
 import android.content.SharedPreferences;
 import android.os.Bundle;
-import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
@@ -23,13 +22,14 @@ public class MainActivity extends AppCompatActivity {
     FragmentContainerView fragmentContainerView;
     BottomNavigationView bottomNavigationView;
     Fragment mapFragment;
-    Fragment chatFragment;
-    Fragment friendsFragment;
+    ChatFragment chatFragment;
+    FriendsFragment friendsFragment;
     Fragment selectedFragment;
 
     SharedPreferences sharedPreferences;
     FirebaseAuth auth;
-    public static FirebaseUser currentUser;
+    public static FirebaseUser currentUser = null;
+    private FirebaseAuth.AuthStateListener authStateListener;
 
     //on create
     @Override
@@ -47,10 +47,18 @@ public class MainActivity extends AppCompatActivity {
 
         // The Firebase SDK automatically persists the user's session.
         // All we need to do is check who the current user is on startup.
-        if(sharedPreferences.getBoolean("login", true))
-        {
-            currentUser = auth.getCurrentUser();
-        }
+
+        authStateListener = firebaseAuth -> {
+            currentUser = firebaseAuth.getCurrentUser();
+            if (chatFragment != null) {
+                chatFragment.updateUI();
+            }
+            if (friendsFragment != null) {
+                friendsFragment.updateUI();
+            }
+        };
+
+
         FM = getSupportFragmentManager();
         fragmentContainerView = findViewById(R.id.fragmentContainerView);
         bottomNavigationView = findViewById(R.id.bottomNavigationView);
@@ -74,6 +82,23 @@ public class MainActivity extends AppCompatActivity {
             showFragment(selectedFragment);
             return true;
         });
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        auth.addAuthStateListener(authStateListener);
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        if (authStateListener != null) {
+            auth.removeAuthStateListener(authStateListener);
+        }
+        if (auth.getCurrentUser() != null && !sharedPreferences.getBoolean("remember", false)) {
+            auth.signOut();
+        }
     }
 
     //creates a fragment view
