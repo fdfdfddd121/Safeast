@@ -1,11 +1,14 @@
 package com.app.safeast.fragments;
 
+import android.Manifest;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -18,16 +21,22 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.SearchView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.app.safeast.R;
 import com.app.safeast.activities.LoginActivity;
 import com.app.safeast.activities.MainActivity;
 import com.app.safeast.objects.FriendsAdapter;
+import com.app.safeast.objects.GPSShare;
 import com.app.safeast.objects.Request;
 import com.app.safeast.objects.RequestsAdapter;
 import com.app.safeast.objects.SearchUserAdapter;
 import com.app.safeast.objects.User;
 import com.app.safeast.objects.Friend;
+import androidx.lifecycle.ViewModelProvider;
+import com.app.safeast.objects.SharedLocationViewModel;
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationServices;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
@@ -53,6 +62,10 @@ public class FriendsFragment extends Fragment {
     RecyclerView searchRV;
     RecyclerView friendsRV;
     SearchView searchFriends;
+    private FusedLocationProviderClient fusedLocationClient;
+    private SharedLocationViewModel sharedViewModel;
+
+
 
     List<User> allUsers = new ArrayList<>();
     SearchUserAdapter searchAdapter;
@@ -70,6 +83,10 @@ public class FriendsFragment extends Fragment {
     // ===== Requests =====
     List<Request> requestList = new ArrayList<>();
     RequestsAdapter requestsAdapter;
+
+    private Set<String> pendingGpsRequestUids = new HashSet<>();
+    private ValueEventListener gpsRequestsListener;
+    private ValueEventListener gpsSharesListener;
 
     // ===== Friends =====
     List<Friend> friendsList = new ArrayList<>();
@@ -108,6 +125,8 @@ public class FriendsFragment extends Fragment {
         searchRV = view.findViewById(R.id.searchList);
         friendsRV = view.findViewById(R.id.friendsList);
         searchFriends = view.findViewById(R.id.searchView);
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireContext());
+        sharedViewModel = new ViewModelProvider(requireActivity()).get(SharedLocationViewModel.class);
 
         launcher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(),
                 result -> {
@@ -166,11 +185,6 @@ public class FriendsFragment extends Fragment {
         }
     }
 
-    private void approveGpsRequest(Request r) {
-        //TODO: implement GPS sharing later
-        declineRequest(r);
-    }
-
     public void updateUI() {
         if (MainActivity.currentUser != null) {
             loginORSignBTN.setVisibility(View.GONE);
@@ -179,6 +193,8 @@ public class FriendsFragment extends Fragment {
             loadRequests();
             loadFriends();
             loadSentRequests();
+            loadGpsRequests();
+            loadGpsShares();
 
             DatabaseReference userRef = FirebaseDatabase.getInstance()
                     .getReference()
@@ -388,26 +404,27 @@ public class FriendsFragment extends Fragment {
     }
 
     private void declineRequest(Request r) {
-        if (MainActivity.currentUser == null || r == null || r.requestId == null) {
+        if (MainActivity.currentUser == null || r == null || r.requestId == null || r.type == null) {
             Log.e("FriendsFragment", "❌ Cannot decline - invalid data");
             return;
         }
 
-        Log.d("FriendsFragment", "========== DECLINING REQUEST ==========");
-        Log.d("FriendsFragment", "Request key: " + r.requestId);
+        String node;
+        if ("FRIEND".equals(r.type)) {
+            node = "FriendRequests";
+        } else if ("GPS".equals(r.type)) {
+            node = "GPSRequests";
+        } else {
+            Log.e("FriendsFragment", "❌ Unknown request type: " + r.type);
+            return;
+        }
 
-        // Just delete the single request node
         FirebaseDatabase.getInstance()
-                .getReference("FriendRequests")
+                .getReference(node)
                 .child(r.requestId)
-                .removeValue()
-                .addOnSuccessListener(aVoid -> {
-                    Log.d("FriendsFragment", "✅ Request declined and removed");
-                })
-                .addOnFailureListener(e -> {
-                    Log.e("FriendsFragment", "❌ Error declining: " + e.getMessage());
-                });
+                .removeValue();
     }
+
 
     private void approveFriendRequest(Request r) {
         if (MainActivity.currentUser == null || r == null || r.fromUid == null) {
@@ -512,6 +529,273 @@ public class FriendsFragment extends Fragment {
                 });
     }
 
+    private void loadGpsRequests() {
+        if (MainActivity.currentUser == null) return;
+
+        String myUid = MainActivity.currentUser.getUid();
+        DatabaseReference gpsRequestsRef = FirebaseDatabase.getInstance()
+                .getReference("GPSRequests");
+
+        if (gpsRequestsListener != null) {
+            gpsRequestsRef.removeEventListener(gpsRequestsListener);
+        }
+
+        gpsRequestsListener = new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+
+                pendingGpsRequestUids.clear();
+
+                // 🔥 REMOVE ALL GPS REQUESTS FIRST (reactive reset)
+                requestList.removeIf(r -> "GPS".equals(r.type));
+
+                for (DataSnapshot snap : snapshot.getChildren()) {
+                    Request r = snap.getValue(Request.class);
+                    if (r == null) continue;
+
+                    r.type = "GPS";               // enforce type
+                    r.requestId = snap.getKey();  // enforce id
+
+                    if (myUid.equals(r.fromUid)) {
+                        pendingGpsRequestUids.add(r.toUid);
+                    }
+                    else if (myUid.equals(r.toUid)) {
+                        requestList.add(r);
+                    }
+                }
+
+                friendsAdapter.setPendingGpsRequests(new HashSet<>(pendingGpsRequestUids));
+                requestsAdapter.notifyDataSetChanged();
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+                Log.e("FriendsFragment", "GPS load error: " + error.getMessage());
+            }
+        };
+
+        gpsRequestsRef.addValueEventListener(gpsRequestsListener);
+    }
+
+
+    // Add this field to FriendsFragment
+    private Set<String> knownGpsShares = new HashSet<>();
+
+    // Update loadGpsShares()
+    private void loadGpsShares() {
+        if (MainActivity.currentUser == null) return;
+
+        String myUid = MainActivity.currentUser.getUid();
+        DatabaseReference gpsSharesRef = FirebaseDatabase.getInstance()
+                .getReference("GPSShares");
+
+        if (gpsSharesListener != null) {
+            gpsSharesRef.removeEventListener(gpsSharesListener);
+        }
+
+        gpsSharesListener = new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                Log.d("FriendsFragment", "📍 GPS Shares snapshot. Count: " + snapshot.getChildrenCount());
+
+                boolean foundNewShare = false;
+                Set<String> currentShares = new HashSet<>();
+
+                for (DataSnapshot shareSnap : snapshot.getChildren()) {
+                    GPSShare share = shareSnap.getValue(GPSShare.class);
+                    if (share == null) continue;
+
+                    if (share.isExpired()) {
+                        shareSnap.getRef().removeValue();
+                        sharedViewModel.removeFriendLocation(share.fromUid);
+                        knownGpsShares.remove(share.fromUid);
+                        Log.d("FriendsFragment", "🗑️ Removed expired GPS share");
+                        continue;
+                    }
+
+                    // If this share is for me
+                    if (myUid.equals(share.toUid)) {
+                        currentShares.add(share.fromUid);
+
+                        // Check if this is a NEW share (not seen before)
+                        if (!knownGpsShares.contains(share.fromUid)) {
+                            Log.d("FriendsFragment", "🆕 NEW GPS share from: " + share.fromUid);
+                            foundNewShare = true;
+                        }
+
+                        Log.d("FriendsFragment", "📍 Active GPS share from: " + share.fromUid +
+                                " - " + share.getRemainingSeconds() + "s remaining");
+
+                        // PUSH TO VIEWMODEL
+                        sharedViewModel.updateFriendLocation(share.fromUid, share);
+                    }
+                }
+
+                // Update known shares
+                knownGpsShares = currentShares;
+
+                // AUTO-SWITCH TO MAP TAB ONLY FOR NEW SHARES
+                if (foundNewShare && getActivity() instanceof MainActivity) {
+                    ((MainActivity) getActivity()).switchToMapTab();
+
+                    Toast.makeText(requireContext(),
+                            "📍 Friend shared location! Opening map...",
+                            Toast.LENGTH_LONG).show();
+                }
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+                Log.e("FriendsFragment", "Error loading GPS shares: " + error.getMessage());
+            }
+        };
+
+        gpsSharesRef.addValueEventListener(gpsSharesListener);
+    }
+
+    private boolean isLocationEnabled() {
+        android.location.LocationManager lm =
+                (android.location.LocationManager) requireContext()
+                        .getSystemService(android.content.Context.LOCATION_SERVICE);
+
+        return lm.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER)
+                || lm.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER);
+    }
+
+
+    private void approveGpsRequest(Request r) {
+        if (MainActivity.currentUser == null) return;
+
+        String myUid = MainActivity.currentUser.getUid();
+
+        Log.d("FriendsFragment", "========== APPROVING GPS REQUEST ==========");
+
+        // Check location permission
+        if (ContextCompat.checkSelfPermission(requireContext(),
+                Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+
+            Toast.makeText(requireContext(),
+                    "Location permission required",
+                    Toast.LENGTH_LONG).show();
+
+            // Remove request
+            FirebaseDatabase.getInstance()
+                    .getReference("GPSRequests")
+                    .child(r.requestId)
+                    .removeValue();
+
+            return;
+        }
+
+        if (!isLocationEnabled()) {
+            Toast.makeText(requireContext(),
+                    "Please enable GPS",
+                    Toast.LENGTH_LONG).show();
+
+            startActivity(new Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS));
+            return;
+        }
+
+        // Show loading message
+        Toast.makeText(requireContext(), "Getting your location...", Toast.LENGTH_SHORT).show();
+
+        // Use getCurrentLocation instead of getLastLocation
+        // This forces a fresh location reading
+        fusedLocationClient.getCurrentLocation(
+                com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY,
+                new com.google.android.gms.tasks.CancellationTokenSource().getToken()
+        ).addOnSuccessListener(location -> {
+            if (location != null) {
+                double lat = location.getLatitude();
+                double lng = location.getLongitude();
+
+                Log.d("FriendsFragment", "📍 Current location: " + lat + ", " + lng);
+
+                String combinedKey = getCombinedRequestKey(myUid, r.fromUid);
+                DatabaseReference db = FirebaseDatabase.getInstance().getReference();
+
+                db.child("GPSShares").child(combinedKey).get()
+                        .addOnSuccessListener(snap -> {
+                            if (snap.exists()) {
+                                GPSShare existing = snap.getValue(GPSShare.class);
+                                if (existing != null && !existing.isExpired()) {
+                                    Toast.makeText(requireContext(),
+                                            "Location already shared",
+                                            Toast.LENGTH_SHORT).show();
+                                    return;
+                                }
+                            }
+
+                            // Get my username
+                            db.child("Users").child(myUid).child("username").get()
+                                    .addOnSuccessListener(snap2 -> {
+                                        String myUsername = snap2.getValue(String.class);
+                                        if (myUsername == null) myUsername = "Friend";
+
+                                        // Create GPS share
+                                        Map<String, Object> shareData = new HashMap<>();
+                                        shareData.put("fromUid", myUid);
+                                        shareData.put("toUid", r.fromUid);
+                                        shareData.put("fromUsername", myUsername);
+                                        shareData.put("latitude", lat);
+                                        shareData.put("longitude", lng);
+                                        shareData.put("sharedAt", System.currentTimeMillis());
+                                        shareData.put("expiresAt", System.currentTimeMillis() + 60000);
+
+                                        db.child("GPSShares").child(combinedKey).setValue(shareData)
+                                                .addOnSuccessListener(aVoid -> {
+                                                    Log.d("FriendsFragment", "✅ GPS location shared!");
+
+                                                    // Remove the request
+                                                    db.child("GPSRequests").child(r.requestId).removeValue()
+                                                            .addOnSuccessListener(aVoid2 -> {
+                                                                Log.d("FriendsFragment", "✅ Request removed");
+                                                                Toast.makeText(requireContext(),
+                                                                        "📍 Location shared with " + r.fromUsername + " for 1 minute",
+                                                                        Toast.LENGTH_LONG).show();
+                                                            });
+                                                })
+                                                .addOnFailureListener(e -> {
+                                                    Log.e("FriendsFragment", "❌ Share failed: " + e.getMessage());
+                                                    Toast.makeText(requireContext(),
+                                                            "Failed to share location",
+                                                            Toast.LENGTH_SHORT).show();
+
+                                                    // Remove request anyway
+                                                    db.child("GPSRequests").child(r.requestId).removeValue();
+                                                });
+                                    });
+                        });
+            } else {
+                // Still null - GPS is definitely off
+                Log.e("FriendsFragment", "❌ Location still null after getCurrentLocation");
+
+                Toast.makeText(requireContext(),
+                        "⚠️ Please enable GPS/Location services in your device settings",
+                        Toast.LENGTH_LONG).show();
+
+                // Remove request
+                FirebaseDatabase.getInstance()
+                        .getReference("GPSRequests")
+                        .child(r.requestId)
+                        .removeValue();
+            }
+        }).addOnFailureListener(e -> {
+            Log.e("FriendsFragment", "❌ Location error: " + e.getMessage());
+
+            Toast.makeText(requireContext(),
+                    "Could not get location. Please check GPS settings.",
+                    Toast.LENGTH_LONG).show();
+
+            // Remove request
+            FirebaseDatabase.getInstance()
+                    .getReference("GPSRequests")
+                    .child(r.requestId)
+                    .removeValue();
+        });
+    }
+
+    // Update sendGpsRequest
     private void sendGpsRequest(Friend friend) {
         if (MainActivity.currentUser == null) return;
 
@@ -527,22 +811,44 @@ public class FriendsFragment extends Fragment {
                     String myUsername = snap.getValue(String.class);
                     if (myUsername == null) myUsername = "Unknown";
 
-                    DatabaseReference ref = FirebaseDatabase.getInstance()
-                            .getReference("GPSRequests")  // Separate node for GPS requests
-                            .child(combinedKey);
+                    DatabaseReference sharesRef = FirebaseDatabase.getInstance()
+                            .getReference("GPSShares")
+                            .child(getCombinedRequestKey(myUid, friend.uid));
 
-                    Map<String, Object> data = new HashMap<>();
-                    data.put("fromUid", myUid);
-                    data.put("toUid", friend.uid);
-                    data.put("fromUsername", myUsername);
-                    data.put("type", "GPS");
-                    data.put("status", "PENDING");
-                    data.put("timestamp", System.currentTimeMillis());
+                    String finalMyUsername = myUsername;
+                    sharesRef.get().addOnSuccessListener(snap2 -> {
+                        if (snap2.exists()) {
+                            GPSShare share = snap2.getValue(GPSShare.class);
+                            if (share != null && !share.isExpired()) {
+                                Toast.makeText(requireContext(),
+                                        "Location already shared",
+                                        Toast.LENGTH_SHORT).show();
+                                return;
+                            }
+                        }
 
-                    ref.setValue(data);
-                    Log.d("FriendsFragment", "GPS request sent");
+                        DatabaseReference ref = FirebaseDatabase.getInstance()
+                                .getReference("GPSRequests")
+                                .child(combinedKey);
+
+                        Map<String, Object> data = new HashMap<>();
+                        data.put("fromUid", myUid);
+                        data.put("toUid", friend.uid);
+                        data.put("fromUsername", finalMyUsername);
+                        data.put("type", "GPS");
+                        data.put("status", "PENDING");
+                        data.put("timestamp", System.currentTimeMillis());
+
+                        ref.setValue(data);
+                        Log.d("FriendsFragment", "📍 GPS request sent to: " + friend.username);
+
+                        // Immediately update UI
+                        pendingGpsRequestUids.add(friend.uid);
+                        friendsAdapter.setPendingGpsRequests(new HashSet<>(pendingGpsRequestUids));
+                    });
                 });
     }
+
 
     private void logoutBTNClick(View view) {
         FirebaseAuth.getInstance().signOut();
@@ -573,8 +879,20 @@ public class FriendsFragment extends Fragment {
 
         if (sentRequestsListener != null) {
             FirebaseDatabase.getInstance()
-                    .getReference("Requests")
+                    .getReference("FriendRequests")
                     .removeEventListener(sentRequestsListener);
+        }
+
+        if (gpsRequestsListener != null) {
+            FirebaseDatabase.getInstance()
+                    .getReference("GPSRequests")
+                    .removeEventListener(gpsRequestsListener);
+        }
+
+        if (gpsSharesListener != null) {
+            FirebaseDatabase.getInstance()
+                    .getReference("GPSShares")
+                    .removeEventListener(gpsSharesListener);
         }
     }
 }

@@ -42,9 +42,11 @@ public class RequestsAdapter
         Request r = list.get(pos);
         h.usernameTV.setText(r.fromUsername);
 
-        h.approveBTN.setText(
-                r.type.equals("FRIEND") ? "Accept" : "Share GPS"
-        );
+        if (r.type.equals("FRIEND")) {
+            h.approveBTN.setText("Accept");
+        } else if (r.type.equals("GPS")) {
+            h.approveBTN.setText("Share GPS (1 min)");
+        }
 
         h.approveBTN.setOnClickListener(v -> listener.onApprove(r));
         h.declineBTN.setOnClickListener(v -> listener.onDecline(r));

@@ -1,12 +1,14 @@
 package com.app.safeast.fragments;
 
 import android.os.Bundle;
+import android.util.Log;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
 
 import android.view.LayoutInflater;
 import android.view.View;
@@ -17,22 +19,21 @@ import android.widget.Toast;
 
 import com.app.safeast.R;
 import com.app.safeast.managers.NavigationManager;
+import com.app.safeast.objects.GPSShare;
+import com.app.safeast.objects.SharedLocationViewModel;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.MapView;
 import com.google.android.gms.maps.OnMapReadyCallback;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
+import com.google.android.gms.maps.model.MarkerOptions;
 
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 
-
-/**
- * A simple {@link Fragment} subclass.
- * Use the {@link MapFragment#newInstance} factory method to
- * create an instance of this fragment.
- */
 public class MapFragment extends Fragment implements OnMapReadyCallback, GoogleMap.OnMarkerClickListener {
 
     MapView mapView;
@@ -45,16 +46,14 @@ public class MapFragment extends Fragment implements OnMapReadyCallback, GoogleM
     private ActivityResultLauncher<String> locationPermissionRequest;
     private Marker selectedMarker = null;
 
+    // ADD THESE
+    private SharedLocationViewModel sharedViewModel;
+    private Map<String, Marker> friendMarkers = new HashMap<>();
+
     public MapFragment() {
         // Required empty public constructor
     }
 
-    /**
-     * Use this factory method to create a new instance of
-     * this fragment using the provided parameters.
-     *
-     * @return A new instance of fragment MapFragment.
-     */
     public static MapFragment newInstance() {
         return new MapFragment();
     }
@@ -62,22 +61,18 @@ public class MapFragment extends Fragment implements OnMapReadyCallback, GoogleM
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // This handles the result of the permission request
+
         locationPermissionRequest = registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
             if (isGranted) {
-                // Permission is granted. Try to get the location again.
-                    navManager.sheltersNearGPS(locationPermissionRequest, mapView, getActivity());
+                navManager.sheltersNearGPS(locationPermissionRequest, mapView, getActivity());
             } else {
-                // Permission is denied. Show a message to the user.
                 Toast.makeText(getContext(), "Location permission denied. Cannot get current location.", Toast.LENGTH_LONG).show();
             }
         });
     }
 
-
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-        // Inflate the layout for this fragment
         return inflater.inflate(R.layout.fragment_map, container, false);
     }
 
@@ -85,16 +80,20 @@ public class MapFragment extends Fragment implements OnMapReadyCallback, GoogleM
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        //must initialize variables in view
+        // Initialize ViewModel - SHARED with FriendsFragment
+        sharedViewModel = new ViewModelProvider(requireActivity()).get(SharedLocationViewModel.class);
+
         mapView = view.findViewById(R.id.mapView);
         currLoc = view.findViewById(R.id.currLoc);
         getDir = view.findViewById(R.id.getDir);
         searchView = view.findViewById(R.id.searchView);
         markers = new HashMap<>();
+
         if (mapView != null) {
             mapView.onCreate(savedInstanceState);
-            mapView.getMapAsync(this); // Register the callback
+            mapView.getMapAsync(this);
         }
+
         searchView.setOnClickListener(v -> {
             searchView.setQuery("", false);
             searchView.onActionViewExpanded();
@@ -104,7 +103,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback, GoogleM
         searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
             @Override
             public boolean onQueryTextSubmit(String query) {
-                navManager.sheltersNearSearch(searchView,mapView,getActivity());
+                navManager.sheltersNearSearch(searchView, mapView, getActivity());
                 searchView.clearFocus();
                 return true;
             }
@@ -113,26 +112,18 @@ public class MapFragment extends Fragment implements OnMapReadyCallback, GoogleM
             public boolean onQueryTextChange(String newText) {
                 return false;
             }
-
         });
 
-        //current location function link
         currLoc.setOnClickListener(v -> navManager.sheltersNearGPS(locationPermissionRequest, mapView, getActivity()));
-
-        //get directions function link
         getDir.setOnClickListener(view1 -> navManager.giveDirections(selectedMarker));
     }
 
-    /**
-     * This method is called when the map is fully loaded and ready to be used.
-     */
     @Override
     public void onMapReady(@NonNull GoogleMap map) {
         googleMap = map;
 
-        googleMap.getUiSettings().setZoomControlsEnabled(true); // Show zoom buttons
+        googleMap.getUiSettings().setZoomControlsEnabled(true);
         googleMap.getUiSettings().setAllGesturesEnabled(true);
-
 
         googleMap.setOnMarkerClickListener(this);
         googleMap.setOnMapClickListener(latLng -> {
@@ -141,29 +132,103 @@ public class MapFragment extends Fragment implements OnMapReadyCallback, GoogleM
             getDir.setVisibility(View.GONE);
         });
 
-        // set default location in Beer Sheva
         LatLng beerSheva = new LatLng(31.2530, 34.7915);
         googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(beerSheva, 12));
 
-        //initialize navigationManager
         navManager = new NavigationManager(requireActivity(), googleMap);
 
+        // START OBSERVING FRIEND LOCATIONS
+        observeFriendLocations();
     }
 
+    // OBSERVE FRIEND GPS SHARES
+    private void observeFriendLocations() {
+        sharedViewModel.getFriendLocations().observe(getViewLifecycleOwner(), friendLocations -> {
+            Log.d("MapFragment", "📍 Friend locations updated! Count: " + friendLocations.size());
+
+            // Remove markers for friends no longer sharing
+            for (String uid : new HashMap<>(friendMarkers).keySet()) {
+                if (!friendLocations.containsKey(uid)) {
+                    Marker marker = friendMarkers.get(uid);
+                    if (marker != null) {
+                        marker.remove();
+                        Log.d("MapFragment", "🗑️ Removed marker for: " + uid);
+                    }
+                    friendMarkers.remove(uid);
+                }
+            }
+
+            // Add or update markers for friends sharing location
+            for (Map.Entry<String, GPSShare> entry : friendLocations.entrySet()) {
+                String uid = entry.getKey();
+                GPSShare share = entry.getValue();
+
+                LatLng position = new LatLng(share.latitude, share.longitude);
+
+                String title = (share.fromUsername != null ? share.fromUsername : "Friend") + "'s Location";
+                String snippet = "Expires in " + share.getRemainingSeconds() + " seconds";
+
+                // Update existing marker or create new one
+                Marker existingMarker = friendMarkers.get(uid);
+                if (existingMarker != null) {
+                    existingMarker.setPosition(position);
+                    existingMarker.setTitle(title);
+                    existingMarker.setSnippet(snippet);
+                    Log.d("MapFragment", "🔄 Updated marker for: " + title);
+                } else {
+                    // Create new marker with ORANGE color
+                    Marker marker = googleMap.addMarker(new MarkerOptions()
+                            .position(position)
+                            .title(title)
+                            .snippet(snippet)
+                            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)));
+
+                    if (marker != null) {
+                        friendMarkers.put(uid, marker);
+                        marker.showInfoWindow();
+
+                        // Move camera to show friend's location
+                        googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(position, 15));
+
+                        Toast.makeText(requireContext(),
+                                "📍 " + title + " visible for " + share.getRemainingSeconds() + "s",
+                                Toast.LENGTH_LONG).show();
+
+                        Log.d("MapFragment", "✅ Added marker for: " + title + " at " + position);
+                    }
+                }
+            }
+        });
+    }
 
     @Override
     public boolean onMarkerClick(@NonNull Marker marker) {
-        if (Objects.equals(marker.getTitle(), "USER"))
-        {
+        if (Objects.equals(marker.getTitle(), "USER")) {
             return false;
         }
         selectedMarker = marker;
-        currLoc.setVisibility(View.GONE);
-        getDir.setVisibility(View.VISIBLE);
+
+        // Check if this is a friend marker (don't show directions for friend markers)
+        boolean isFriendMarker = false;
+        for (Marker friendMarker : friendMarkers.values()) {
+            if (friendMarker.equals(marker)) {
+                isFriendMarker = true;
+                break;
+            }
+        }
+
+        if (isFriendMarker) {
+            // Just show info window, no directions button
+            currLoc.setVisibility(View.VISIBLE);
+            getDir.setVisibility(View.GONE);
+        } else {
+            // Shelter marker - show directions button
+            currLoc.setVisibility(View.GONE);
+            getDir.setVisibility(View.VISIBLE);
+        }
+
         return false;
     }
-
-    // --- ADD ALL OF THE FOLLOWING METHODS FOR MAP LIFECYCLE MANAGEMENT ---
 
     @Override
     public void onResume() {
@@ -203,6 +268,12 @@ public class MapFragment extends Fragment implements OnMapReadyCallback, GoogleM
         if (mapView != null) {
             mapView.onDestroy();
         }
+
+        // Clean up friend markers
+        for (Marker marker : friendMarkers.values()) {
+            marker.remove();
+        }
+        friendMarkers.clear();
     }
 
     @Override
@@ -220,5 +291,4 @@ public class MapFragment extends Fragment implements OnMapReadyCallback, GoogleM
             mapView.onSaveInstanceState(outState);
         }
     }
-
 }

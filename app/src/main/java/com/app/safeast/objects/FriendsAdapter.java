@@ -11,7 +11,9 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.app.safeast.R;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class FriendsAdapter extends RecyclerView.Adapter<FriendsAdapter.FriendVH> {
 
@@ -22,10 +24,18 @@ public class FriendsAdapter extends RecyclerView.Adapter<FriendsAdapter.FriendVH
 
     private List<Friend> list;
     private FriendActionListener listener;
+    private Set<String> pendingGpsRequestUids = new HashSet<>();  // Track pending GPS requests
 
     public FriendsAdapter(List<Friend> list, FriendActionListener listener) {
         this.list = list;
         this.listener = listener;
+    }
+
+    // Add method to update pending GPS requests
+    public void setPendingGpsRequests(Set<String> uids) {
+        this.pendingGpsRequestUids.clear();
+        this.pendingGpsRequestUids.addAll(uids);
+        notifyDataSetChanged();
     }
 
     @NonNull
@@ -40,7 +50,20 @@ public class FriendsAdapter extends RecyclerView.Adapter<FriendsAdapter.FriendVH
     public void onBindViewHolder(@NonNull FriendVH h, int pos) {
         Friend f = list.get(pos);
         h.usernameTV.setText(f.username);
-        h.gpsBTN.setOnClickListener(v -> listener.onGpsRequest(f));
+
+        boolean hasPendingGps = pendingGpsRequestUids.contains(f.uid);
+
+        if (hasPendingGps) {
+            h.gpsBTN.setText("GPS Pending...");
+            h.gpsBTN.setEnabled(false);
+            h.gpsBTN.setAlpha(0.5f);
+        } else {
+            h.gpsBTN.setText("Request GPS");
+            h.gpsBTN.setEnabled(true);
+            h.gpsBTN.setAlpha(1.0f);
+            h.gpsBTN.setOnClickListener(v -> listener.onGpsRequest(f));
+        }
+
         h.removeBTN.setOnClickListener(v -> listener.onRemoveFriend(f));
     }
 

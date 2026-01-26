@@ -31,7 +31,6 @@ public class MainActivity extends AppCompatActivity {
     public static FirebaseUser currentUser = null;
     private FirebaseAuth.AuthStateListener authStateListener;
 
-    //on create
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -39,14 +38,9 @@ public class MainActivity extends AppCompatActivity {
         init();
     }
 
-    //initialize all the variables
-    private void init()
-    {
+    private void init() {
         auth = FirebaseAuth.getInstance();
         sharedPreferences = getSharedPreferences("login", MODE_PRIVATE);
-
-        // The Firebase SDK automatically persists the user's session.
-        // All we need to do is check who the current user is on startup.
 
         authStateListener = firebaseAuth -> {
             currentUser = firebaseAuth.getCurrentUser();
@@ -57,7 +51,6 @@ public class MainActivity extends AppCompatActivity {
                 friendsFragment.updateUI();
             }
         };
-
 
         FM = getSupportFragmentManager();
         fragmentContainerView = findViewById(R.id.fragmentContainerView);
@@ -70,6 +63,7 @@ public class MainActivity extends AppCompatActivity {
         createFragment(friendsFragment);
         createFragment(chatFragment);
         showFragment(selectedFragment);
+
         bottomNavigationView.setOnItemSelectedListener(item -> {
             hideFragment(selectedFragment);
             if (item.getItemId() == R.id.mapMenu) {
@@ -81,6 +75,17 @@ public class MainActivity extends AppCompatActivity {
             }
             showFragment(selectedFragment);
             return true;
+        });
+    }
+
+    public void switchToMapTab() {
+        runOnUiThread(() -> {
+            if (selectedFragment != mapFragment) {
+                hideFragment(selectedFragment);
+                selectedFragment = mapFragment;
+                showFragment(selectedFragment);
+                bottomNavigationView.setSelectedItemId(R.id.mapMenu);
+            }
         });
     }
 
@@ -101,8 +106,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    //creates a fragment view
-    private void createFragment(Fragment fragment){
+    private void createFragment(Fragment fragment) {
         getSupportFragmentManager()
                 .beginTransaction()
                 .add(R.id.fragmentContainerView, fragment)
@@ -110,20 +114,17 @@ public class MainActivity extends AppCompatActivity {
                 .commit();
     }
 
-    //shows fragment view
-    private void showFragment(Fragment fragment){
+    private void showFragment(Fragment fragment) {
         getSupportFragmentManager()
                 .beginTransaction()
                 .show(fragment)
                 .commit();
     }
 
-    //hides fragment view
-    private void hideFragment(Fragment fragment){
+    private void hideFragment(Fragment fragment) {
         getSupportFragmentManager()
                 .beginTransaction()
                 .hide(fragment)
                 .commit();
     }
-
 }
