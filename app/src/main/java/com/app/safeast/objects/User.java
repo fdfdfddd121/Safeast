@@ -10,4 +10,8 @@ public class User {
         this.uid = uid;
         this.username = username;
     }
+
+    public String getUid() {
+        return uid;
+    }
 }

@@ -17,6 +17,7 @@ import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
 
 import com.app.safeast.BuildConfig;
+import com.app.safeast.helperFiles.GPSEnabler;
 import com.app.safeast.helperFiles.MapHelper;
 import com.app.safeast.objects.Shelter;
 import com.app.safeast.objects.UserMarker;
@@ -144,21 +145,34 @@ public class NavigationManager {
     //gets the shelters near the user's location
     public void sheltersNearGPS(ActivityResultLauncher<String> locationPermissionRequest, MapView mapView, Activity activity) {
         clearMarkers();
+
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            fusedLocationClient.getLastLocation().addOnSuccessListener(activity, location -> {
-                if (location != null) {
-                    LatLng currentLatLng = new LatLng(location.getLatitude(), location.getLongitude());
-                    if (user == null) {
-                        user = new UserMarker(currentLatLng, googleMap);
-                    } else {
-                        user.setLocation(currentLatLng, googleMap);
+
+            // INLINE GPS CHECK - Show dialog if GPS is off
+            GPSEnabler.checkAndEnableGPS(context,
+                    () -> {
+                        // GPS is enabled (or user just enabled it) - get location
+                        fusedLocationClient.getLastLocation().addOnSuccessListener(activity, location -> {
+                            if (location != null) {
+                                LatLng currentLatLng = new LatLng(location.getLatitude(), location.getLongitude());
+                                if (user == null) {
+                                    user = new UserMarker(currentLatLng, googleMap);
+                                } else {
+                                    user.setLocation(currentLatLng, googleMap);
+                                }
+                                googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 16f));
+                                getShelters(mapView, activity);
+                            } else {
+                                Toast.makeText(context, "Could not get location. Please try again.", Toast.LENGTH_LONG).show();
+                            }
+                        });
+                    },
+                    () -> {
+                        // GPS is disabled and user declined to enable it
+                        Toast.makeText(context, "Location services are required. Please enable GPS.", Toast.LENGTH_LONG).show();
                     }
-                    googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 16f)); // Zoom in closer
-                    getShelters(mapView, activity);
-                } else {
-                    Toast.makeText(context, "Could not get location. Make sure location is enabled on the device.", Toast.LENGTH_LONG).show();
-                }
-            });
+            );
+
         } else {
             locationPermissionRequest.launch(Manifest.permission.ACCESS_FINE_LOCATION);
         }
