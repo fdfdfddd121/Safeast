@@ -1,5 +1,5 @@
 [versions]
-agp = "9.0.0"
+agp = "9.0.1"
 firebaseBom = "34.4.0"
 googleMapsRouting = "1.66.0"
 googleMapsServices = "2.2.0"
