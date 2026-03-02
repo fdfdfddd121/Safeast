@@ -78,8 +78,8 @@ public class GPSEnabler {
                     // Show the system dialog
                     resolvable.startResolutionForResult(activity, GPS_ENABLE_REQUEST_CODE);
 
-                    // Poll for GPS status after a delay (since we can't use onActivityResult easily)
-                    // This gives user time to enable GPS
+                    // Poll for GPS status after a delay
+                    // Start polling immediately to detect state change
                     pollForGPSEnabled(context, onEnabled, onDisabled, 0);
 
                 } catch (IntentSender.SendIntentException e) {
@@ -109,11 +109,13 @@ public class GPSEnabler {
         }
 
         handler.postDelayed(() -> {
+            // Use a fresh builder and request to check status
             LocationRequest locationRequest = LocationRequest.create()
                     .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
 
             LocationSettingsRequest.Builder builder = new LocationSettingsRequest.Builder()
-                    .addLocationRequest(locationRequest);
+                    .addLocationRequest(locationRequest)
+                    .setAlwaysShow(false); // We just want to check, not prompt again
 
             SettingsClient client = LocationServices.getSettingsClient(context);
             Task<LocationSettingsResponse> task = client.checkLocationSettings(builder.build());
@@ -126,11 +128,17 @@ public class GPSEnabler {
 
             task.addOnFailureListener(exception -> {
                 // Still not enabled, keep polling
-                Log.d("GPSEnabler", "⏳ GPS still disabled, attempt " + (attemptCount + 1));
-                pollForGPSEnabled(context, onEnabled, onDisabled, attemptCount + 1);
+                // Only continue polling if it's still a resolvable error (meaning GPS is just OFF)
+                if (exception instanceof ResolvableApiException) {
+                    Log.d("GPSEnabler", "⏳ GPS still disabled, attempt " + (attemptCount + 1));
+                    pollForGPSEnabled(context, onEnabled, onDisabled, attemptCount + 1);
+                } else {
+                    Log.e("GPSEnabler", "Polling failed with non-resolvable error");
+                    if (onDisabled != null) onDisabled.run();
+                }
             });
 
-        }, 500); // Check every 500ms
+        }, 1000); // Check every 1 second (increased from 500ms for stability)
     }
 
     /**

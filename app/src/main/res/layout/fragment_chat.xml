@@ -1,57 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent">
-
-<LinearLayout
-    android:id="@+id/chatLayout"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:visibility="gone"
-    tools:context=".fragments.ChatFragment">
-
-
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/chatRV"
+        xmlns:app="http://schemas.android.com/apk/res-auto"
+        xmlns:tools="http://schemas.android.com/tools"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="6"
-        />
+        android:layout_height="match_parent">
+
+    <Button
+            android:id="@+id/loginORSignBTN"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Please connect to account"
+            android:visibility="gone"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
 
     <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:orientation="horizontal">
+            android:id="@+id/chatLayout"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:visibility="visible"
+            tools:context=".fragments.ChatFragment">
 
-    <Button
-        android:id="@+id/sendBT"
-        android:layout_weight="1"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:text="Send" />
+        <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/chatRV"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:padding="8dp"
+                android:clipToPadding="false" />
 
-    <EditText
-        android:id="@+id/messageET"
-        android:layout_weight="3"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:ems="10"
-        android:inputType="text"
-        android:hint="enter prompt here"  />
+        <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="8dp"
+                android:background="?attr/colorSurface"
+                android:elevation="8dp"
+                android:gravity="center_vertical">
+
+            <EditText
+                    android:id="@+id/messageET"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="Type a message..."
+                    android:background="@null"
+                    android:padding="12dp"
+                    android:maxLines="4"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:textColorHint="?android:attr/textColorSecondary"
+                    android:inputType="textMultiLine" />
+
+            <Button
+                    android:id="@+id/sendBT"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Send"
+                    style="@style/Widget.Material3.Button.TextButton" />
+
+        </LinearLayout>
     </LinearLayout>
-</LinearLayout>
 
-    <Button
-        android:id="@+id/loginORSignBTN"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Please connect to account"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
 </androidx.constraintlayout.widget.ConstraintLayout>

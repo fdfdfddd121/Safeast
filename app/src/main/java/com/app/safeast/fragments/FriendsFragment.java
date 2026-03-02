@@ -151,8 +151,13 @@ public class FriendsFragment extends Fragment implements FriendsManager.Callback
 
     public void updateUI() {
         if (MainActivity.currentUser == null) {
-            loginORSignBTN.setVisibility(View.GONE);
-            friendsMenu.setVisibility(View.VISIBLE);
+            if (fm != null) {
+                fm.stop();
+                fm = null;
+            }
+            loginORSignBTN.setVisibility(View.VISIBLE);
+            friendsMenu.setVisibility(View.GONE);
+            usernameTV.setText("");
             return;
         }
 
@@ -196,10 +201,12 @@ public class FriendsFragment extends Fragment implements FriendsManager.Callback
             }
         }
 
-        searchAdapter = new SearchUserAdapter(filtered, MainActivity.currentUser.getUid());
-        searchAdapter.setPendingRequests(pendingRequestUids);
-        searchAdapter.setFriends(friendUids);
-        searchRV.setAdapter(searchAdapter);
+        if (MainActivity.currentUser != null) {
+            searchAdapter = new SearchUserAdapter(filtered, MainActivity.currentUser.getUid());
+            searchAdapter.setPendingRequests(pendingRequestUids);
+            searchAdapter.setFriends(friendUids);
+            searchRV.setAdapter(searchAdapter);
+        }
     }
 
     @Override
