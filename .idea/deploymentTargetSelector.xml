@@ -4,10 +4,10 @@
     <selectionStates>
       <SelectionState runConfigName="app">
         <option name="selectionMode" value="DIALOG" />
-        <DropdownSelection timestamp="2026-01-26T06:48:02.885246700Z">
+        <DropdownSelection timestamp="2026-03-02T11:58:15.565463600Z">
           <Target type="DEFAULT_BOOT">
             <handle>
-              <DeviceId pluginId="LocalEmulator" identifier="path=C:\Users\Cyber_User\.android\avd\Medium_Phone_API_35_1.avd" />
+              <DeviceId pluginId="PhysicalDevice" identifier="serial=RZCY41J20TM" />
             </handle>
           </Target>
         </DropdownSelection>
@@ -20,7 +20,12 @@
             </Target>
             <Target type="DEFAULT_BOOT">
               <handle>
-                <DeviceId pluginId="LocalEmulator" identifier="path=C:\Users\Cyber_User\.android\avd\Medium_Phone_API_35_1.avd" />
+                <DeviceId pluginId="LocalEmulator" identifier="path=C:\Users\electric ice wolf\.android\avd\Pixel_8.avd" />
+              </handle>
+            </Target>
+            <Target type="DEFAULT_BOOT">
+              <handle>
+                <DeviceId pluginId="LocalEmulator" identifier="path=C:\Users\electric ice wolf\.android\avd\galaxy_note_8.avd" />
               </handle>
             </Target>
           </targets>

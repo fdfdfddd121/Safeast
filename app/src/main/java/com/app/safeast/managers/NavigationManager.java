@@ -21,6 +21,9 @@ import com.app.safeast.helperFiles.GPSEnabler;
 import com.app.safeast.helperFiles.MapHelper;
 import com.app.safeast.objects.Shelter;
 import com.app.safeast.objects.UserMarker;
+import com.google.android.gms.location.LocationCallback;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -151,21 +154,43 @@ public class NavigationManager {
             // INLINE GPS CHECK - Show dialog if GPS is off
             GPSEnabler.checkAndEnableGPS(context,
                     () -> {
-                        // GPS is enabled (or user just enabled it) - get location
-                        fusedLocationClient.getLastLocation().addOnSuccessListener(activity, location -> {
-                            if (location != null) {
-                                LatLng currentLatLng = new LatLng(location.getLatitude(), location.getLongitude());
-                                if (user == null) {
-                                    user = new UserMarker(currentLatLng, googleMap);
+                        // GPS is enabled - try to get a FRESH location
+                        LocationRequest locationRequest = LocationRequest.create()
+                                .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY)
+                                .setInterval(1000)
+                                .setNumUpdates(1);
+
+                        fusedLocationClient.requestLocationUpdates(locationRequest, new LocationCallback() {
+                            @Override
+                            public void onLocationResult(@NonNull LocationResult locationResult) {
+                                if (locationResult.getLastLocation() != null) {
+                                    LatLng currentLatLng = new LatLng(locationResult.getLastLocation().getLatitude(), locationResult.getLastLocation().getLongitude());
+                                    if (user == null) {
+                                        user = new UserMarker(currentLatLng, googleMap);
+                                    } else {
+                                        user.setLocation(currentLatLng, googleMap);
+                                    }
+                                    googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 16f));
+                                    getShelters(mapView, activity);
                                 } else {
-                                    user.setLocation(currentLatLng, googleMap);
+                                    // Fallback to last location if updates fail
+                                    fusedLocationClient.getLastLocation().addOnSuccessListener(activity, location -> {
+                                        if (location != null) {
+                                            LatLng currentLatLng = new LatLng(location.getLatitude(), location.getLongitude());
+                                            if (user == null) {
+                                                user = new UserMarker(currentLatLng, googleMap);
+                                            } else {
+                                                user.setLocation(currentLatLng, googleMap);
+                                            }
+                                            googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 16f));
+                                            getShelters(mapView, activity);
+                                        } else {
+                                            Toast.makeText(context, "Could not get location. Please try again.", Toast.LENGTH_LONG).show();
+                                        }
+                                    });
                                 }
-                                googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 16f));
-                                getShelters(mapView, activity);
-                            } else {
-                                Toast.makeText(context, "Could not get location. Please try again.", Toast.LENGTH_LONG).show();
                             }
-                        });
+                        }, activity.getMainLooper());
                     },
                     () -> {
                         // GPS is disabled and user declined to enable it
@@ -216,7 +241,7 @@ public class NavigationManager {
                 shelter.remove();
             }
             shelterMap.clear();
-            user.getMarker().remove();
+            if (user != null && user.getMarker() != null) user.getMarker().remove();
         }
         Shelter.resetCount();
     }

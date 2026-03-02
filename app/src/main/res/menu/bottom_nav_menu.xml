@@ -1,13 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <item android:title="Map"
-        android:id="@+id/mapMenu"
-        />
-    <item android:title="Friends"
-        android:id="@+id/friendsMenu"
-        />
-    <item android:title="AI Chat"
-        android:id="@+id/aiChatMenu"
-        />
+    <item
+            android:id="@+id/mapMenu"
+            android:icon="@drawable/ic_map"
+            android:title="Map" />
+    <item
+            android:id="@+id/friendsMenu"
+            android:icon="@drawable/ic_friends"
+            android:title="Friends" />
+    <item
+            android:id="@+id/aiChatMenu"
+            android:icon="@drawable/ic_ai_chat"
+            android:title="AI Chat" />
 </menu>
