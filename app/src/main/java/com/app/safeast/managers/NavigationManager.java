@@ -3,17 +3,20 @@ package com.app.safeast.managers;
 import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.location.Address;
 import android.location.Geocoder;
+import android.net.Uri;
 import android.util.Log;
 import android.widget.SearchView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.annotation.NonNull;
+import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import com.app.safeast.BuildConfig;
@@ -80,68 +83,37 @@ public class NavigationManager {
         this.fusedLocationClient = LocationServices.getFusedLocationProviderClient(context);
     }
 
-    //gets the directions between the user and the shelter selected
+    // LUNCHES GOOGLE MAPS FOR DIRECTIONS
     public void giveDirections(Marker destMarker) {
-        if (destMarker == null || googleMap == null || user == null) {
-            Log.e("NavigationManager", "Cannot give directions: missing data");
+        if (destMarker == null) {
+            Log.e("NavigationManager", "Cannot give directions: destination marker is null.");
+            Toast.makeText(context, "Cannot get directions for this location.", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        LatLng origin = user.getLocation();
         LatLng destination = destMarker.getPosition();
+        // Create a Uri from an intent string. Use the result to create an Intent.
+        Uri gmmIntentUri = Uri.parse("google.navigation:q=" + destination.latitude + "," + destination.longitude + "&mode=w"); // "w" for walking
 
-        String apiKey = com.app.safeast.BuildConfig.DIRECTIONS_API_KEY;
-        String urlString = "https://maps.googleapis.com/maps/api/directions/json?" +
-                "origin=" + origin.latitude + "," + origin.longitude +
-                "&destination=" + destination.latitude + "," + destination.longitude +
-                "&mode=walking" +
-                "&key=" + apiKey;
+        // Create an Intent from gmmIntentUri. Set the action to ACTION_VIEW
+        Intent mapIntent = new Intent(Intent.ACTION_VIEW, gmmIntentUri);
+        // Make the Intent explicit by setting the Google Maps package
+        mapIntent.setPackage("com.google.android.apps.maps");
 
-        Request request = new Request.Builder().url(urlString).build();
-
-        client.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                Log.e("NavigationManager", "Failed to fetch directions", e);
-                if (context instanceof Activity) {
-                    ((Activity) context).runOnUiThread(() ->
-                            Toast.makeText(context, "Failed to load directions", Toast.LENGTH_SHORT).show()
-                    );
-                }
+        // Attempt to start an activity that can handle the Intent
+        if (mapIntent.resolveActivity(context.getPackageManager()) != null) {
+            context.startActivity(mapIntent);
+        } else {
+            // If Google Maps is not installed, open in browser
+            Toast.makeText(context, "Google Maps not found, opening in browser.", Toast.LENGTH_LONG).show();
+            Uri webIntentUri = Uri.parse("https://www.google.com/maps/dir/?api=1&destination=" + destination.latitude + "," + destination.longitude + "&travelmode=walking");
+            Intent webIntent = new Intent(Intent.ACTION_VIEW, webIntentUri);
+            if (webIntent.resolveActivity(context.getPackageManager()) != null) {
+                context.startActivity(webIntent);
+            } else {
+                Toast.makeText(context, "No application can handle this request. Please install a web browser.", Toast.LENGTH_LONG).show();
             }
-
-            @Override
-            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                if (!response.isSuccessful()) return;
-
-                try {
-                    String responseBody = response.body().string();
-                    JSONObject json = new JSONObject(responseBody);
-                    String status = json.getString("status");
-
-                    if (!status.equals("OK")) {
-                        Log.e("NavigationManager", "Directions API Error: " + status);
-                        return;
-                    }
-
-                    JSONArray routes = json.getJSONArray("routes");
-                    if (routes.length() > 0) {
-                        JSONObject route = routes.getJSONObject(0);
-                        JSONObject overviewPolyline = route.getJSONObject("overview_polyline");
-                        String encodedString = overviewPolyline.getString("points");
-
-                        List<LatLng> points = MapHelper.decodePoly(encodedString);
-
-                        if (context instanceof Activity) {
-                            ((Activity) context).runOnUiThread(() -> MapHelper.drawRouteOnMap(points, origin, destination,googleMap));
-                        }
-                    }
-
-                } catch (JSONException e) {
-                    Log.e("NavigationManager", "JSON Error", e);
-                }
-            }
-        });
+        }
     }
 
 
@@ -160,6 +132,9 @@ public class NavigationManager {
                                 .setInterval(1000)
                                 .setNumUpdates(1);
 
+                        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                            return;
+                        }
                         fusedLocationClient.requestLocationUpdates(locationRequest, new LocationCallback() {
                             @Override
                             public void onLocationResult(@NonNull LocationResult locationResult) {
@@ -174,6 +149,9 @@ public class NavigationManager {
                                     getShelters(mapView, activity);
                                 } else {
                                     // Fallback to last location if updates fail
+                                    if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                                        return;
+                                    }
                                     fusedLocationClient.getLastLocation().addOnSuccessListener(activity, location -> {
                                         if (location != null) {
                                             LatLng currentLatLng = new LatLng(location.getLatitude(), location.getLongitude());
