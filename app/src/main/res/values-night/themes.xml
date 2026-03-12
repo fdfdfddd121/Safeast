@@ -1,7 +1,14 @@
 <resources>
-    <!-- Base application theme. -->
     <style name="Base.Theme.Safeast" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your dark theme here. -->
-        <!-- <item name="colorPrimary">@color/my_dark_primary</item> -->
+        <item name="colorPrimary">#4A99B0</item>
+        <item name="colorOnPrimary">#121212</item>
+
+        <item name="android:windowBackground">@color/bg_dark</item>
+        <item name="android:statusBarColor">#000000</item>
+
+        <item name="colorSecondaryContainer">#1E2A2D</item>
+
+        <!-- Make surface distinct from background in dark mode -->
+        <item name="colorSurface">#1E1E1E</item>
     </style>
 </resources>
