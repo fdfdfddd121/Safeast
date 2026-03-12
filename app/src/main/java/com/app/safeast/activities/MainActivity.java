@@ -35,10 +35,10 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        init();
+        init(savedInstanceState);
     }
 
-    private void init() {
+    private void init(Bundle savedInstanceState) {
         auth = FirebaseAuth.getInstance();
         sharedPreferences = getSharedPreferences("login", MODE_PRIVATE);
 
@@ -55,14 +55,30 @@ public class MainActivity extends AppCompatActivity {
         FM = getSupportFragmentManager();
         fragmentContainerView = findViewById(R.id.fragmentContainerView);
         bottomNavigationView = findViewById(R.id.bottomNavigationView);
-        mapFragment = new MapFragment();
-        friendsFragment = new FriendsFragment();
-        chatFragment = new ChatFragment();
-        selectedFragment = mapFragment;
-        createFragment(mapFragment);
-        createFragment(friendsFragment);
-        createFragment(chatFragment);
-        showFragment(selectedFragment);
+
+        if (savedInstanceState == null) {
+            mapFragment = new MapFragment();
+            friendsFragment = new FriendsFragment();
+            chatFragment = new ChatFragment();
+            selectedFragment = mapFragment;
+            createFragment(mapFragment, "map");
+            createFragment(friendsFragment, "friends");
+            createFragment(chatFragment, "chat");
+            showFragment(selectedFragment);
+        } else {
+            mapFragment = FM.findFragmentByTag("map");
+            friendsFragment = (FriendsFragment) FM.findFragmentByTag("friends");
+            chatFragment = (ChatFragment) FM.findFragmentByTag("chat");
+
+            int selectedId = bottomNavigationView.getSelectedItemId();
+            if (selectedId == R.id.mapMenu) {
+                selectedFragment = mapFragment;
+            } else if (selectedId == R.id.friendsMenu) {
+                selectedFragment = friendsFragment;
+            } else if (selectedId == R.id.aiChatMenu) {
+                selectedFragment = chatFragment;
+            }
+        }
 
         bottomNavigationView.setOnItemSelectedListener(item -> {
             hideFragment(selectedFragment);
@@ -106,25 +122,29 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void createFragment(Fragment fragment) {
+    private void createFragment(Fragment fragment, String tag) {
         getSupportFragmentManager()
                 .beginTransaction()
-                .add(R.id.fragmentContainerView, fragment)
+                .add(R.id.fragmentContainerView, fragment, tag)
                 .hide(fragment)
                 .commit();
     }
 
     private void showFragment(Fragment fragment) {
-        getSupportFragmentManager()
-                .beginTransaction()
-                .show(fragment)
-                .commit();
+        if (fragment != null) {
+            getSupportFragmentManager()
+                    .beginTransaction()
+                    .show(fragment)
+                    .commit();
+        }
     }
 
     private void hideFragment(Fragment fragment) {
-        getSupportFragmentManager()
-                .beginTransaction()
-                .hide(fragment)
-                .commit();
+        if (fragment != null) {
+            getSupportFragmentManager()
+                    .beginTransaction()
+                    .hide(fragment)
+                    .commit();
+        }
     }
 }
