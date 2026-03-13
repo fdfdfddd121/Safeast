@@ -30,8 +30,27 @@ android {
         }
     }
 
+    signingConfigs {
+        release {
+            def secrets = new Properties()
+            def secretsFile = rootProject.file('secrets.properties')
+            if (secretsFile.exists()) {
+                secrets.load(new FileInputStream(secretsFile))
+            }
+
+            // Trim whitespace to prevent padding errors
+            def storeFilePath = secrets['RELEASE_STORE_FILE']?.trim()
+            if (storeFilePath) {
+                storeFile file(storeFilePath)
+                storePassword secrets['RELEASE_STORE_PASSWORD']?.trim()
+                keyAlias secrets['RELEASE_KEY_ALIAS']?.trim()
+                keyPassword secrets['RELEASE_KEY_PASSWORD']?.trim()
+            }
+        }
+    }
     buildTypes {
         release {
+            signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
@@ -40,6 +59,7 @@ android {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
     }
+
 }
 
 secrets {
@@ -66,19 +86,16 @@ dependencies {
     implementation libs.gms.play.services.location
     implementation libs.locationtech.proj4j.epsg
     implementation libs.locationtech.proj4j
-    implementation libs.locationtech.proj4j.epsg
     implementation libs.okhttp
     implementation libs.cardview
     implementation libs.firebase.database
     implementation libs.recyclerview
     implementation libs.generativeai
-    def fragment_version = "1.2.5"
     implementation libs.fragment
     implementation libs.appcompat
     implementation libs.material
     implementation libs.activity
     implementation libs.constraintlayout
-    implementation libs.fragment
     testImplementation libs.junit
     androidTestImplementation libs.ext.junit
     androidTestImplementation libs.espresso.core
